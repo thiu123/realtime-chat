@@ -1,0 +1,157 @@
+import { Conversation, Message } from "@/types/chat";
+
+export const conversations: Conversation[] = [
+  {
+    id: "1",
+    user: {
+      id: "u1",
+      name: "Bill Kuphal",
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
+      online: true,
+      lastSeen: "10 mins",
+    },
+    lastMessage: "The weather will be perfect for th...",
+    timestamp: "9:41 AM",
+  },
+  {
+    id: "2",
+    user: {
+      id: "u2",
+      name: "Photographers",
+      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=100&h=100&fit=crop&crop=face",
+      online: false,
+    },
+    lastMessage: "Here're my latest drone shots",
+    timestamp: "9:16 AM",
+    unreadCount: 80,
+  },
+  {
+    id: "3",
+    user: {
+      id: "u3",
+      name: "Daryl Bogisich, Ian Daniel, +1",
+      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face",
+      online: false,
+    },
+    lastMessage: "You: Store is out of stock",
+    timestamp: "Yesterday",
+    muted: true,
+  },
+  {
+    id: "4",
+    user: {
+      id: "u4",
+      name: "SpaceX Crew-16 Launch",
+      avatar: "https://images.unsplash.com/photo-1614728263952-84ea256f9679?w=100&h=100&fit=crop",
+      online: false,
+    },
+    lastMessage: "I've been there!",
+    timestamp: "Thursday",
+  },
+  {
+    id: "5",
+    user: {
+      id: "u5",
+      name: "Lela Walsh",
+      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
+      online: false,
+    },
+    lastMessage: "Next time it's my turn!",
+    timestamp: "12/22/21",
+  },
+  {
+    id: "6",
+    user: {
+      id: "u6",
+      name: "Roland Marks",
+      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
+      online: false,
+    },
+    lastMessage: "@waldo Glad to hear that 😊",
+    timestamp: "12/16/21",
+  },
+  {
+    id: "7",
+    user: {
+      id: "u7",
+      name: "Helen Flatley",
+      avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face",
+      online: false,
+    },
+    lastMessage: "You: Ok",
+    timestamp: "12/13/21",
+  },
+];
+
+export const messages: Message[] = [
+  {
+    id: "m1",
+    senderId: "u1",
+    content: "Check this",
+    link: "https://dribbble.com",
+    type: "link",
+    timestamp: "3:16 PM",
+    read: true,
+  },
+  {
+    id: "m2",
+    senderId: "me",
+    type: "text",
+    timestamp: "5:34 PM",
+    reactions: [
+      { emoji: "👍", count: 1 },
+      { emoji: "❤️", count: 1 },
+    ],
+    read: true,
+  },
+  {
+    id: "m3",
+    senderId: "u1",
+    content: "😂",
+    type: "emoji",
+    timestamp: "5:34 PM",
+  },
+  {
+    id: "m4",
+    senderId: "u1",
+    type: "link",
+    content: "Go Webb!",
+    link: "https://www.reddit.com/r/technology/comments/rxfsix/this_amazing_hd_video_is_the_last_view_well_ever/",
+    linkPreview: {
+      url: "https://reddit.com",
+      source: "Reddit",
+      title: "This amazing HD video is the last vi...",
+      description: "Posted in r/technology by u/Defiant_Race • 436 points and 53 comments",
+      image: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=400&h=200&fit=crop",
+    },
+    timestamp: "5:38 PM",
+  },
+  {
+    id: "m5",
+    senderId: "me",
+    type: "text",
+    content: "The message you are trying to send is larger than 5000 characters.",
+    timestamp: "9:41 AM",
+    read: true,
+  },
+  {
+    id: "m6",
+    senderId: "me",
+    type: "image",
+    content: "Here you go.",
+    images: [
+      "https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1454789548928-9efd52dc4031?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1460186136353-977e9d6085a1?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1517976487492-5750f3195933?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1484589065579-248aad0d628b?w=300&h=300&fit=crop",
+      "https://images.unsplash.com/photo-1464802686167-b939a6910659?w=300&h=300&fit=crop",
+    ],
+    timestamp: "9:41 AM",
+    read: true,
+  },
+];

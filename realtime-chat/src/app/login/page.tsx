@@ -11,23 +11,17 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import axios from "axios";
+import { authService } from "@/services/auth.service";
+import { setAccessToken } from "@/lib/auth";
 import { useState, useEffect } from "react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const login = async () => {
-    try {
-      const response = await axios.post("http://localhost:5000/api/auth/login", {
-        email,
-        password,
-      });
-      return response;
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
+  const handleLogin = async () => {
+    const data = await authService.login({ email, password });
+    setAccessToken(data.access_token);
   };
 
   return (
@@ -78,7 +72,7 @@ export default function Login() {
           </form>
         </CardContent>
         <CardFooter className="flex-col gap-2">
-          <Button type="submit" className="w-full" onClick={login}>
+          <Button type="submit" className="w-full" onClick={handleLogin}>
             Login
           </Button>
           <Button variant="outline" className="w-full">
