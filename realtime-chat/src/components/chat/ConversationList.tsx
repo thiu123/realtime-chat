@@ -1,7 +1,8 @@
-import { Search, Menu } from "lucide-react";
+import { Search } from "lucide-react";
 import { Conversation } from "@/types/chat";
 import { ConversationItem } from "./ConversationItem";
 import { Input } from "@/components/ui/input";
+import { UserProfileButton } from "./UserProfile";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -15,12 +16,10 @@ export function ConversationList({
   onSelect,
 }: ConversationListProps) {
   return (
-    <div className="w-[380px] h-full bg-card border-r border-border flex flex-col">
+    <div className="flex-1 bg-card flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-4 flex items-center gap-3">
-        <button className="p-2 hover:bg-secondary rounded-lg transition-colors">
-          <Menu className="w-5 h-5 text-foreground" />
-        </button>
+        <UserProfileButton />
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input

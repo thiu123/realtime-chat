@@ -12,16 +12,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/auth.service";
-import { setAccessToken } from "@/lib/auth";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth.store";
 
 export default function Login() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleLogin = async () => {
     const data = await authService.login({ email, password });
-    setAccessToken(data.access_token);
+    useAuthStore.getState().setAuth(data.user, data.access_token);
+    router.push("/");
   };
 
   return (

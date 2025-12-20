@@ -1,8 +1,8 @@
 "use client";
-
 import { useState } from "react";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { UserProfileButton } from "@/components/chat/UserProfile";
 import { conversations, messages } from "@/data/mockData";
 import { Message } from "@/types/chat";
 
@@ -33,11 +33,13 @@ const Index = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <ConversationList
-        conversations={conversations}
-        activeId={activeConversationId}
-        onSelect={setActiveConversationId}
-      />
+      <div className="flex flex-col w-[380px] border-r border-border bg-card">
+        <ConversationList
+          conversations={conversations}
+          activeId={activeConversationId}
+          onSelect={setActiveConversationId}
+        />
+      </div>
       <ChatPanel
         user={activeConversation.user}
         messages={chatMessages}
