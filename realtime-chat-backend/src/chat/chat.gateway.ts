@@ -4,8 +4,11 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { MessagesService } from '../messages/messages.service';
 
 @WebSocketGateway({
   cors: {
@@ -16,55 +19,153 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  // TODO: Inject services bạn cần
-  // constructor(
-  //   private messagesService: MessagesService,
-  //   private conversationsService: ConversationsService,
-  // ) {}
+  constructor(private messagesService: MessagesService) {}
 
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
-    // TODO: Handle user authentication
-    // TODO: Join user to their conversation rooms
+    console.log(`✅ Client connected: ${client.id}`);
   }
-
+  
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
-    // TODO: Update user status to offline
+    console.log(`❌ Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('sendMessage')
-  async handleMessage(client: Socket, payload: any) {
-    // TODO: Implement logic
-    // 1. Validate payload (conversationId, content)
-    // 2. Save message to database
-    // 3. Emit message to all participants in conversation
-
-    console.log('Received message:', payload);
-
-    // Example emit:
-    // this.server.to(conversationId).emit('newMessage', savedMessage);
-  }
-
+  /**
+   * 🏠 Join vào room của cuộc trò chuyện
+   * Client gửi: { conversationId: string }
+   */
   @SubscribeMessage('joinConversation')
-  async handleJoinConversation(client: Socket, conversationId: string) {
-    // TODO: Implement logic
-    // 1. Verify user has access to conversation
-    // 2. Join socket room
+  async handleJoinConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { conversationId: string },
+  ) {
+    const { conversationId } = payload;
 
     client.join(conversationId);
-    console.log(`Client ${client.id} joined conversation ${conversationId}`);
+
+    console.log(`👥 Client ${client.id} joined conversation ${conversationId}`);
+
+    return { status: 'joined', conversationId };
   }
 
+  /**
+   * 💬 CREATE - Gửi tin nhắn mới (Realtime qua Socket)
+   * Client gửi: { conversationId: string, senderId: string, content: string }
+   */
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: { conversationId: string; senderId: string; content: string },
+  ) {
+    try {
+      // 1. Lưu tin nhắn vào database
+      const newMessage = await this.messagesService.create(payload.senderId, {
+        conversationId: payload.conversationId,
+        content: payload.content,
+      });
+
+      console.log('📨 New message saved:', newMessage._id);
+
+      // 2. Gửi tin nhắn đến tất cả người trong room (bao gồm cả người gửi)
+      this.server.to(payload.conversationId).emit('newMessage', newMessage);
+
+      // 3. Trả về cho người gửi
+      return { status: 'sent', message: newMessage };
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      return { status: 'error', message: error.message };
+    }
+  }
+
+  /**
+   * ✏️ UPDATE - Sửa tin nhắn (Realtime qua Socket)
+   * Client gửi: { messageId: string, senderId: string, content: string, conversationId: string }
+   */
+  @SubscribeMessage('updateMessage')
+  async handleUpdateMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      messageId: string;
+      senderId: string;
+      content: string;
+      conversationId: string;
+    },
+  ) {
+    try {
+      // 1. Cập nhật tin nhắn trong database
+      const updatedMessage = await this.messagesService.update(
+        payload.messageId,
+        payload.senderId,
+        payload.content,
+      );
+
+      console.log('✏️ Message updated:', updatedMessage._id);
+
+      // 2. Gửi tin nhắn đã sửa đến tất cả người trong room
+      this.server
+        .to(payload.conversationId)
+        .emit('messageUpdated', updatedMessage);
+
+      return { status: 'updated', message: updatedMessage };
+    } catch (error) {
+      console.error('❌ Error updating message:', error);
+      return { status: 'error', message: error.message };
+    }
+  }
+
+  /**
+   * 🗑️ DELETE - Xóa tin nhắn (Realtime qua Socket)
+   * Client gửi: { messageId: string, senderId: string, conversationId: string }
+   */
+  @SubscribeMessage('deleteMessage')
+  async handleDeleteMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      messageId: string;
+      senderId: string;
+      conversationId: string;
+    },
+  ) {
+    try {
+      // 1. Xóa tin nhắn trong database
+      const result = await this.messagesService.delete(
+        payload.messageId,
+        payload.senderId,
+      );
+
+      console.log('🗑️ Message deleted:', payload.messageId);
+
+      // 2. Thông báo cho tất cả người trong room
+      this.server.to(payload.conversationId).emit('messageDeleted', {
+        messageId: payload.messageId,
+      });
+
+      return { status: 'deleted', ...result };
+    } catch (error) {
+      console.error('❌ Error deleting message:', error);
+      return { status: 'error', message: error.message };
+    }
+  }
+
+  /**
+   * ⌨️ Typing indicator
+   * Client gửi: { conversationId: string, userId: string, isTyping: boolean }
+   */
   @SubscribeMessage('typing')
   async handleTyping(
-    client: Socket,
-    payload: { conversationId: string; isTyping: boolean },
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      conversationId: string;
+      userId: string;
+      isTyping: boolean;
+    },
   ) {
-    // TODO: Broadcast typing status to other users in conversation
-
+    // Gửi cho tất cả người khác trong room (không gửi lại cho chính người gửi)
     client.to(payload.conversationId).emit('userTyping', {
-      userId: 'TODO', // Get from client auth
+      userId: payload.userId,
       isTyping: payload.isTyping,
     });
   }
