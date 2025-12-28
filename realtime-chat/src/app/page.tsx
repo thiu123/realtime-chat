@@ -33,7 +33,7 @@ const Index = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <div className="flex flex-col w-[380px] border-r border-border bg-card">
+      <div className="flex flex-col w-95 border-r border-border bg-card">
         <ConversationList
           conversations={conversations}
           activeId={activeConversationId}

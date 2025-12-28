@@ -22,7 +22,7 @@ export function ChatAvatar({
   className,
 }: AvatarProps) {
   return (
-    <div className="relative flex-shrink-0">
+    <div className="relative shrink-0">
       <img
         src={src}
         alt={alt}
