@@ -30,7 +30,7 @@ export function MessageInput({ onSend }: MessageInputProps) {
         <Button
           variant="ghost"
           size="icon"
-          className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
         >
           <Plus className="w-5 h-5" />
         </Button>
@@ -55,7 +55,7 @@ export function MessageInput({ onSend }: MessageInputProps) {
         <Button
           onClick={handleSend}
           size="icon"
-          className="flex-shrink-0 bg-primary hover:bg-primary/90"
+          className="shrink-0 bg-primary hover:bg-primary/90"
         >
           <Send className="w-5 h-5" />
         </Button>

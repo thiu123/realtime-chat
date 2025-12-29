@@ -12,21 +12,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authService } from "@/services/auth.service";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth.store";
+import { socketService } from "@/services/socket.service";
 
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   const handleLogin = async () => {
     const data = await authService.login({ email, password });
     useAuthStore.getState().setAuth(data.user, data.access_token);
     router.push("/");
   };
-
+  useEffect(() => {
+    if (user) {
+      socketService.connect(accessToken || undefined);
+    } else {
+      socketService.disconnect();
+    }
+  }, [user, accessToken]);
   return (
     <div className="flex justify-center items-center min-h-screen bg-black">
       <Card className="w-full max-w-sm">
