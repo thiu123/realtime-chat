@@ -38,6 +38,8 @@ export class AuthService {
       user: {
         id: user._id,
         email: user.email,
+        name: user.name,
+        avatar: user.avatar,
       },
     };
   }
@@ -61,11 +63,21 @@ export class AuthService {
       user: {
         id: user._id,
         email: user.email,
+        name: user.name,
+        avatar: user.avatar,
       },
     };
   }
 
   async validateUser(userId: string) {
     return this.usersService.findOne(userId);
+  }
+
+  verifyToken(token: string) {
+    try {
+      return this.jwtService.verify(token);
+    } catch (e) {
+      return null;
+    }
   }
 }
