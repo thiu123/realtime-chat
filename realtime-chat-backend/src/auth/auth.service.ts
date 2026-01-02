@@ -27,6 +27,7 @@ export class AuthService {
 
     const user = await this.usersService.create({
       ...createUserDto,
+      name: createUserDto.name || createUserDto.email.split('@')[0],
       password: hashedPassword,
     });
 

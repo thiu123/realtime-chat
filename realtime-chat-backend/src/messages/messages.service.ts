@@ -25,7 +25,7 @@ export class MessagesService {
     const savedMessage = await newMessage.save();
 
     // Populate thông tin người gửi để trả về đầy đủ
-    return await savedMessage.populate('senderId', 'username email');
+    return await savedMessage.populate('senderId', 'name email avatar');
   }
 
   /**
@@ -35,7 +35,7 @@ export class MessagesService {
   async findByConversation(conversationId: string) {
     return await this.messageModel
       .find({ conversationId })
-      .populate('senderId', 'username email')
+      .populate('senderId', 'name email avatar')
       .sort({ createdAt: 1 }) // Sắp xếp từ cũ đến mới
       .exec();
   }
