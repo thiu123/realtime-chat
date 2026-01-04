@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export interface AuthUser {
+  id: string;
   name: string;
   email: string;
   avatar?: string;
@@ -18,7 +19,6 @@ interface AuthActions {
 }
 
 type AuthStore = AuthState & AuthActions;
-
 
 export const useAuthStore = create<AuthStore>()(
   persist(

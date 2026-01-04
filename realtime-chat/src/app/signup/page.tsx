@@ -11,12 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, FormEvent } from "react";
-import axios from "axios";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { authService } from "@/services/auth.service";
 
 export default function Signup() {
   const router = useRouter();
+  const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -28,15 +29,7 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:5000/api/auth/signup", {
-        email,
-        password,
-      });
-
-      if (response.data.access_token) {
-        localStorage.setItem("access_token", response.data.access_token);
-      }
-
+      await authService.signup({ name, email, password });
       router.push("/login");
     } catch (error: any) {
       console.error("Signup failed:", error);
@@ -92,7 +85,7 @@ export default function Signup() {
                 required
                 className="h-11"
               />
-            </div> */}
+            </div>
 
             {/* Email Field */}
             <div className="space-y-2">

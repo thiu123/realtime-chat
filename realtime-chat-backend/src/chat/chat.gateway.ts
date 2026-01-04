@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from '../messages/messages.service';
+import { ConversationsService } from '../conversations/conversations.service';
 
 @WebSocketGateway({
   cors: {
@@ -19,12 +20,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private messagesService: MessagesService) {}
+  constructor(
+    private messagesService: MessagesService,
+    private conversationsService: ConversationsService,
+  ) {}
 
   handleConnection(client: Socket) {
     console.log(`✅ Client connected: ${client.id}`);
   }
-  
+
   handleDisconnect(client: Socket) {
     console.log(`❌ Client disconnected: ${client.id}`);
   }
@@ -66,10 +70,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       console.log('📨 New message saved:', newMessage._id);
 
-      // 2. Gửi tin nhắn đến tất cả người trong room (bao gồm cả người gửi)
+      // 2. Cập nhật lastMessage trong conversation
+      await this.conversationsService.updateLastMessage(
+        payload.conversationId,
+        newMessage._id.toString(),
+      );
+
+      // 3. Gửi tin nhắn đến tất cả người trong room (bao gồm cả người gửi)
       this.server.to(payload.conversationId).emit('newMessage', newMessage);
 
-      // 3. Trả về cho người gửi
+      // 4. Trả về cho người gửi
       return { status: 'sent', message: newMessage };
     } catch (error) {
       console.error('❌ Error sending message:', error);
