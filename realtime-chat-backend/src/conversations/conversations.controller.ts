@@ -34,10 +34,11 @@ export class ConversationsController {
     @Body('participantId') participantId: string,
   ) {
     // Kiểm tra xem conversation đã tồn tại chưa
-    const existing = await this.conversationsService.findConversationBetweenUsers(
-      userId,
-      participantId,
-    );
+    const existing =
+      await this.conversationsService.findConversationBetweenUsers(
+        userId,
+        participantId,
+      );
 
     if (existing) {
       return existing;
