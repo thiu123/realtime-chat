@@ -15,7 +15,7 @@ export function ChatHeader({ user }: ChatHeaderProps) {
         online={user.online}
       />
       <div>
-        <h2 className="font-semibold text-foreground">{user.name}</h2>
+        <h2 className="font-semibold text-foreground">{user?.name}</h2>
         <p className="text-sm text-muted-foreground">
           {user.online
             ? `Online for ${user.lastSeen}`

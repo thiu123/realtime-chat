@@ -14,16 +14,14 @@ import {
   ApiMessage,
   ApiUser,
 } from "@/services/chat.service";
-import { Conversation, Message, User } from "@/types/chat";
+import { Conversation, Message } from "@/types/chat";
 
-// Helper: Chuyển đổi API data sang UI format
-const formatConversation = (
+// Chuyển API data sang UI format
+const toUIConversation = (
   conv: ApiConversation,
-  currentUserId: string
+  userId: string
 ): Conversation => {
-  // Lấy người còn lại trong conversation (không phải mình)
-  const otherUser = conv.participants.find((p) => p._id !== currentUserId);
-
+  const otherUser = conv.participants.find((p) => p._id !== userId);
   return {
     id: conv._id,
     user: {
@@ -42,7 +40,7 @@ const formatConversation = (
   };
 };
 
-const formatMessage = (msg: ApiMessage): Message => {
+const toUIMessage = (msg: ApiMessage): Message => {
   const sender = typeof msg.senderId === "object" ? msg.senderId : null;
   return {
     id: msg._id,
@@ -67,12 +65,11 @@ const Index = () => {
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Lấy conversation đang active
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
   );
 
-  // Load conversations & users khi component mount
+  // Load dữ liệu ban đầu
   useEffect(() => {
     if (!user) {
       router.push("/login");
@@ -82,25 +79,22 @@ const Index = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        // Load users và conversations cùng lúc
         const [usersData, conversationsData] = await Promise.all([
           getUsers(),
           getConversations(user.id),
         ]);
 
-        setUsers(usersData.filter((u) => u._id !== user.id)); // Loại bỏ chính mình
-
-        const formattedConversations = conversationsData.map((c) =>
-          formatConversation(c, user.id)
+        setUsers(usersData.filter((u) => u._id !== user.id));
+        const formattedConvs = conversationsData.map((c) =>
+          toUIConversation(c, user.id)
         );
-        setConversations(formattedConversations);
+        setConversations(formattedConvs);
 
-        // Chọn conversation đầu tiên nếu có
-        if (formattedConversations.length > 0) {
-          setActiveConversationId(formattedConversations[0].id);
+        if (formattedConvs.length > 0) {
+          setActiveConversationId(formattedConvs[0].id);
         }
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error("Error:", error);
       } finally {
         setLoading(false);
       }
@@ -112,45 +106,42 @@ const Index = () => {
   // Kết nối Socket
   useEffect(() => {
     if (!accessToken) return;
-
     socketService.connect(accessToken);
-
-    return () => {
-      socketService.disconnect();
-    };
+    return () => socketService.disconnect();
   }, [accessToken]);
 
-  // Join room và load messages khi chọn conversation
+  // Load messages khi chọn conversation
   useEffect(() => {
     if (!activeConversationId) return;
 
-    // Join vào room của conversation
     socketService.emit("joinConversation", {
       conversationId: activeConversationId,
     });
 
-    // Load messages
     const loadMessages = async () => {
       try {
         const messagesData = await getMessages(activeConversationId);
-        setMessages(messagesData.map(formatMessage));
+        setMessages(messagesData.map(toUIMessage));
       } catch (error) {
-        console.error("Error loading messages:", error);
+        console.error("Error:", error);
       }
     };
 
     loadMessages();
   }, [activeConversationId]);
 
-  // Lắng nghe tin nhắn mới từ Socket
+  // Lắng nghe tin nhắn mới
   useEffect(() => {
     const handleNewMessage = (newMsg: ApiMessage) => {
-      console.log("📨 Received new message:", newMsg);
+      // Thêm tin nhắn vào conversation đang active
+      if (newMsg.conversationId === activeConversationId) {
+        setMessages((prev) => {
+          if (prev.find((m) => m.id === newMsg._id)) return prev;
+          return [...prev, toUIMessage(newMsg)];
+        });
+      }
 
-      // Thêm tin nhắn mới vào danh sách
-      setMessages((prev) => [...prev, formatMessage(newMsg)]);
-
-      // Cập nhật lastMessage trong conversation list
+      // Cập nhật lastMessage trong danh sách conversations
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === newMsg.conversationId
@@ -168,27 +159,14 @@ const Index = () => {
     };
 
     socketService.on("newMessage", handleNewMessage);
-
-    return () => {
-      socketService.off("newMessage");
-    };
-  }, []);
+    return () => socketService.off("newMessage");
+  }, [activeConversationId]);
 
   // Gửi tin nhắn
   const handleSendMessage = useCallback(
     (content: string) => {
-      if (!user || !activeConversationId) {
-        console.warn("Cannot send message:", { user, activeConversationId });
-        return;
-      }
+      if (!user || !activeConversationId) return;
 
-      console.log("📤 Sending message:", {
-        conversationId: activeConversationId,
-        senderId: user.id,
-        content,
-      });
-
-      // Gửi qua Socket
       socketService.emit("sendMessage", {
         conversationId: activeConversationId,
         senderId: user.id,
@@ -198,7 +176,7 @@ const Index = () => {
     [user, activeConversationId]
   );
 
-  // Bắt đầu chat với user mới
+  // Bắt đầu chat với user
   const handleStartChat = useCallback(
     async (participantId: string) => {
       if (!user) return;
@@ -208,18 +186,16 @@ const Index = () => {
           user.id,
           participantId
         );
-        const formatted = formatConversation(conversation, user.id);
+        const formatted = toUIConversation(conversation, user.id);
 
-        // Kiểm tra conversation đã tồn tại chưa
         setConversations((prev) => {
-          const exists = prev.find((c) => c.id === formatted.id);
-          if (exists) return prev;
+          if (prev.find((c) => c.id === formatted.id)) return prev;
           return [formatted, ...prev];
         });
 
         setActiveConversationId(formatted.id);
       } catch (error) {
-        console.error("Error creating conversation:", error);
+        console.error("Error:", error);
       }
     },
     [user]
@@ -229,8 +205,8 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <p>Đang tải...</p>
+      <div className="flex h-screen items-center justify-center">
+        Đang tải...
       </div>
     );
   }

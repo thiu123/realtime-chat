@@ -7,38 +7,28 @@ import { Check, CheckCheck } from "lucide-react";
 
 interface MessageBubbleProps {
   message: Message;
-  isSent: boolean;
 }
 
-export function MessageBubble({ message, isSent }: MessageBubbleProps) {
+export function MessageBubble({ message }: MessageBubbleProps) {
   const isEmoji = message.type === "emoji";
 
   return (
-    <div
-      className={cn(
-        "flex flex-col mb-4 animate-fade-in",
-        isSent ? "items-end" : "items-start"
-      )}
-    >
+    <div className={cn("flex flex-col mb-4 animate-fade-in")}>
       <div
         className={cn(
           "max-w-md",
           !isEmoji && "px-4 py-2.5 rounded-2xl",
-          isSent &&
-            !isEmoji &&
-            "bg-chat-sent text-primary-foreground rounded-br-sm",
-          !isSent &&
-            !isEmoji &&
-            "bg-chat-received text-foreground rounded-bl-sm"
+
+          !isEmoji && "bg-chat-sent text-primary-foreground rounded-br-sm",
+
+          !isEmoji && "bg-chat-received text-foreground rounded-bl-sm"
         )}
       >
         {message.type === "emoji" && (
           <span className="text-5xl">{message.content}</span>
         )}
 
-        {message.type === "text" && (
-          <p className="text-sm leading-relaxed">{message.content}</p>
-        )}
+        {<p className="text-sm leading-relaxed">{message.content}</p>}
 
         {message.type === "link" && (
           <>
@@ -70,12 +60,11 @@ export function MessageBubble({ message, isSent }: MessageBubbleProps) {
         <span className="text-xs text-muted-foreground">
           {message.timestamp}
         </span>
-        {isSent &&
-          (message.read ? (
-            <CheckCheck className="w-4 h-4 text-primary" />
-          ) : (
-            <Check className="w-4 h-4 text-muted-foreground" />
-          ))}
+        {message.read ? (
+          <CheckCheck className="w-4 h-4 text-primary" />
+        ) : (
+          <Check className="w-4 h-4 text-muted-foreground" />
+        )}
       </div>
     </div>
   );
