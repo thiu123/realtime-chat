@@ -1,27 +1,26 @@
-import { Message, User } from "@/types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { ChatAvatar } from "./Avatar";
 import { useEffect, useRef } from "react";
+import { useChatStore } from "@/stores/chat.store";
+import { useAuthStore } from "@/stores/auth.store";
 
-interface MessageListProps {
-  messages: Message[];
-  currentUserId: string;
-  otherUser: User;
-}
-
-export function MessageList({
-  messages,
-  currentUserId,
-  otherUser,
-}: MessageListProps) {
+export function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const messages = useChatStore((state) => state.messages);
+  const activeConversation = useChatStore((state) =>
+    state.activeConversation()
+  );
+  const currentUserId = useAuthStore((state) => state.user?.id);
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  if (!activeConversation || !currentUserId) return null;
 
   return (
     <div
@@ -34,13 +33,14 @@ export function MessageList({
         </div>
       )}
       {messages.map((message) => {
+        const isMe = message.senderId === currentUserId;
         return (
-          <div key={message.id} className="flex gap-2">
+          <div key={message.id} className={`flex mb-2 ${isMe ? "justify-end" : "justify-start"}`}>
             {
-              <div className="flex flex-col justify-end">
+              <div className="flex flex-col justify-center">
                 <ChatAvatar
-                  src={otherUser.avatar}
-                  alt={otherUser.name}
+                  src={activeConversation.user.avatar}
+                  alt={activeConversation.user.name}
                   size="sm"
                 />
               </div>

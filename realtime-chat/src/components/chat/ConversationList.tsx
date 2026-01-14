@@ -1,6 +1,5 @@
 import { Search, Plus } from "lucide-react";
-import { useState } from "react";
-import { Conversation } from "@/types/chat";
+import { useState, useCallback } from "react";
 import { ConversationItem } from "./ConversationItem";
 import { Input } from "@/components/ui/input";
 import { UserProfileButton } from "./UserProfile";
@@ -12,28 +11,46 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ApiUser } from "@/services/chat.service";
+import { useChatStore } from "@/stores/chat.store";
+import { useAuthStore } from "@/stores/auth.store";
+import { createOrGetConversation } from "@/services/chat.service";
+import { toUIConversation } from "@/stores/chat.store";
 
-interface ConversationListProps {
-  conversations: Conversation[];
-  activeId: string;
-  onSelect: (id: string) => void;
-  users?: ApiUser[];
-  onStartChat?: (userId: string) => void;
-}
-
-export function ConversationList({
-  conversations,
-  activeId,
-  onSelect,
-  users = [],
-  onStartChat,
-}: ConversationListProps) {
+export function ConversationList() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  const user = useAuthStore((state) => state.user);
+  const {
+    conversations,
+    activeConversationId,
+    users,
+    setActiveConversationId,
+    addConversation,
+  } = useChatStore();
+
+  const handleStartChat = useCallback(
+    async (participantId: string) => {
+      if (!user) return;
+
+      try {
+        const conversation = await createOrGetConversation(
+          user.id,
+          participantId
+        );
+        const formatted = toUIConversation(conversation, user.id);
+
+        addConversation(formatted);
+        setActiveConversationId(formatted.id);
+        setDialogOpen(false);
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    },
+    [user, addConversation, setActiveConversationId]
+  );
+
   const handleSelectUser = (userId: string) => {
-    onStartChat?.(userId);
-    setDialogOpen(false);
+    handleStartChat(userId);
   };
 
   return (
@@ -110,8 +127,8 @@ export function ConversationList({
             <ConversationItem
               key={conversation.id}
               conversation={conversation}
-              isActive={conversation.id === activeId}
-              onClick={() => onSelect(conversation.id)}
+              isActive={conversation.id === activeConversationId}
+              onClick={() => setActiveConversationId(conversation.id)}
             />
           ))
         )}

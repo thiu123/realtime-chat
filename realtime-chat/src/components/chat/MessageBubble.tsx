@@ -15,22 +15,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div className={cn("flex flex-col mb-4 animate-fade-in")}>
       <div
-        className={cn(
-          "max-w-md",
-          !isEmoji && "px-4 py-2.5 rounded-2xl",
+      // className={cn(
+      //   "max-w-md",
+      //   !isEmoji && "px-4 py-2.5 rounded-2xl",
 
-          !isEmoji && "bg-chat-sent text-primary-foreground rounded-br-sm",
+      //   !isEmoji && "bg-chat-sent text-primary-foreground rounded-br-sm",
 
-          !isEmoji && "bg-chat-received text-foreground rounded-bl-sm"
-        )}
+      //   !isEmoji && "bg-chat-received text-foreground rounded-bl-sm"
+      // )}
       >
-        {message.type === "emoji" && (
+        {/* {message.type === "emoji" && (
           <span className="text-5xl">{message.content}</span>
-        )}
+        )} */}
 
         {<p className="text-sm leading-relaxed">{message.content}</p>}
 
-        {message.type === "link" && (
+        {/* {message.type === "link" && (
           <>
             {message.content && (
               <p className="text-sm mb-1">{message.content}</p>
@@ -47,16 +47,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               <LinkPreviewCard preview={message.linkPreview} />
             )}
           </>
-        )}
+        )} */}
 
-        {message.type === "image" && message.images && (
+        {/* {message.type === "image" && message.images && (
           <ImageGrid images={message.images} caption={message.content} />
-        )}
+        )} */}
       </div>
 
-      {message.reactions && <MessageReactions reactions={message.reactions} />}
+      {/* {message.reactions && <MessageReactions reactions={message.reactions} />} */}
 
-      <div className="flex items-center gap-1 mt-1">
+      {/* <div className="flex items-center gap-1 mt-1">
         <span className="text-xs text-muted-foreground">
           {message.timestamp}
         </span>
@@ -65,7 +65,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         ) : (
           <Check className="w-4 h-4 text-muted-foreground" />
         )}
-      </div>
+      </div> */}
     </div>
   );
 }
