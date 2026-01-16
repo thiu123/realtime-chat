@@ -1,76 +1,49 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { useAuthStore } from "@/stores/auth.store";
+import {
+  useChatStore,
+  toUIConversation,
+  toUIMessage,
+} from "@/stores/chat.store";
 import { socketService } from "@/services/socket.service";
 import {
   getConversations,
   getMessages,
   getUsers,
   createOrGetConversation,
-  ApiConversation,
   ApiMessage,
-  ApiUser,
 } from "@/services/chat.service";
-import { Conversation, Message } from "@/types/chat";
-
-// Chuyển API data sang UI format
-const toUIConversation = (
-  conv: ApiConversation,
-  userId: string
-): Conversation => {
-  const otherUser = conv.participants.find((p) => p._id !== userId);
-  return {
-    id: conv._id,
-    user: {
-      id: otherUser?._id || "",
-      name: otherUser?.name || "Unknown",
-      avatar: otherUser?.avatar || "",
-      online: false,
-    },
-    lastMessage: conv.lastMessage?.content || "Chưa có tin nhắn",
-    timestamp: conv.lastMessageAt
-      ? new Date(conv.lastMessageAt).toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        })
-      : "",
-  };
-};
-
-const toUIMessage = (msg: ApiMessage): Message => {
-  const sender = typeof msg.senderId === "object" ? msg.senderId : null;
-  return {
-    id: msg._id,
-    senderId: sender?._id || (msg.senderId as string),
-    content: msg.content,
-    type: "text",
-    timestamp: new Date(msg.createdAt).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-  };
-};
 
 const Index = () => {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const hasHydrated = useAuthStore((state) => state._hasHydrated);
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string>("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [users, setUsers] = useState<ApiUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Chat store
+  const {
+    activeConversationId,
+    loading,
+    activeConversation,
+    setConversations,
+    setActiveConversationId,
+    setMessages,
+    addMessage,
+    updateConversationLastMessage,
+    setUsers,
+    setLoading,
+    addConversation,
+  } = useChatStore();
 
-  const activeConversation = conversations.find(
-    (c) => c.id === activeConversationId
-  );
-
-  // Load dữ liệu ban đầu
   useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
     if (!user) {
       router.push("/login");
       return;
@@ -101,9 +74,15 @@ const Index = () => {
     };
 
     loadData();
-  }, [user, router]);
+  }, [
+    user,
+    router,
+    setLoading,
+    setUsers,
+    setConversations,
+    setActiveConversationId,
+  ]);
 
-  // Kết nối Socket
   useEffect(() => {
     if (!accessToken) return;
     socketService.connect(accessToken);
@@ -128,39 +107,20 @@ const Index = () => {
     };
 
     loadMessages();
-  }, [activeConversationId]);
+  }, [activeConversationId, setMessages]);
 
-  // Lắng nghe tin nhắn mới
   useEffect(() => {
     const handleNewMessage = (newMsg: ApiMessage) => {
-      // Thêm tin nhắn vào conversation đang active
       if (newMsg.conversationId === activeConversationId) {
-        setMessages((prev) => {
-          if (prev.find((m) => m.id === newMsg._id)) return prev;
-          return [...prev, toUIMessage(newMsg)];
-        });
+        addMessage(toUIMessage(newMsg));
       }
 
-      // Cập nhật lastMessage trong danh sách conversations
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv.id === newMsg.conversationId
-            ? {
-                ...conv,
-                lastMessage: newMsg.content,
-                timestamp: new Date(newMsg.createdAt).toLocaleTimeString([], {
-                  hour: "numeric",
-                  minute: "2-digit",
-                }),
-              }
-            : conv
-        )
-      );
+      updateConversationLastMessage(newMsg.conversationId, newMsg);
     };
 
     socketService.on("newMessage", handleNewMessage);
     return () => socketService.off("newMessage");
-  }, [activeConversationId]);
+  }, [activeConversationId, addMessage, updateConversationLastMessage]);
 
   // Gửi tin nhắn
   const handleSendMessage = useCallback(
@@ -177,29 +137,22 @@ const Index = () => {
   );
 
   // Bắt đầu chat với user
-  const handleStartChat = useCallback(
-    async (participantId: string) => {
-      if (!user) return;
+  // const handleStartChat = useCallback(async (participantId: string) => {
+  //   if (!user) return;
 
-      try {
-        const conversation = await createOrGetConversation(
-          user.id,
-          participantId
-        );
-        const formatted = toUIConversation(conversation, user.id);
+  //   try {
+  //     const conversation = await createOrGetConversation(
+  //       user.id,
+  //       participantId
+  //     );
+  //     const formatted = toUIConversation(conversation, user.id);
 
-        setConversations((prev) => {
-          if (prev.find((c) => c.id === formatted.id)) return prev;
-          return [formatted, ...prev];
-        });
-
-        setActiveConversationId(formatted.id);
-      } catch (error) {
-        console.error("Error:", error);
-      }
-    },
-    [user]
-  );
+  //     addConversation(formatted);
+  //     setActiveConversationId(formatted.id);
+  //   } catch (error) {
+  //     console.error("Error:", error);
+  //   }
+  // }, [user][(user, addConversation, setActiveConversationId)]);
 
   if (!user) return null;
 
@@ -214,22 +167,11 @@ const Index = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden">
       <div className="flex flex-col w-95 border-r border-border bg-card">
-        <ConversationList
-          conversations={conversations}
-          activeId={activeConversationId}
-          onSelect={setActiveConversationId}
-          users={users}
-          onStartChat={handleStartChat}
-        />
+        <ConversationList />
       </div>
 
-      {activeConversation ? (
-        <ChatPanel
-          user={activeConversation.user}
-          messages={messages}
-          currentUserId={user.id}
-          onSendMessage={handleSendMessage}
-        />
+      {activeConversation() ? (
+        <ChatPanel onSendMessage={handleSendMessage} />
       ) : (
         <div className="flex-1 flex items-center justify-center bg-background">
           <p className="text-muted-foreground">

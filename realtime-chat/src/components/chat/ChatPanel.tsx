@@ -1,29 +1,23 @@
-import { Message, User } from "@/types/chat";
 import { ChatHeader } from "./ChatHeader";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
+import { useChatStore } from "@/stores/chat.store";
 
 interface ChatPanelProps {
-  user: User;
-  messages: Message[];
-  currentUserId: string;
   onSendMessage: (message: string) => void;
 }
 
-export function ChatPanel({
-  user,
-  messages,
-  currentUserId,
-  onSendMessage,
-}: ChatPanelProps) {
+export function ChatPanel({ onSendMessage }: ChatPanelProps) {
+  const activeConversation = useChatStore((state) =>
+    state.activeConversation()
+  );
+
+  if (!activeConversation) return null;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-background">
-      <ChatHeader user={user} />
-      <MessageList
-        messages={messages}
-        currentUserId={currentUserId}
-        otherUser={user}
-      />
+      <ChatHeader user={activeConversation.user} />
+      <MessageList />
       <MessageInput onSend={onSendMessage} />
     </div>
   );
