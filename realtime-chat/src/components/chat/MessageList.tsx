@@ -10,7 +10,7 @@ export function MessageList() {
 
   const messages = useChatStore((state) => state.messages);
   const activeConversation = useChatStore((state) =>
-    state.activeConversation()
+    state.activeConversation(),
   );
   const currentUserId = useAuthStore((state) => state.user?.id);
 
@@ -35,17 +35,24 @@ export function MessageList() {
       {messages.map((message) => {
         const isMe = message.senderId === currentUserId;
         return (
-          <div key={message.id} className={`flex mb-2 ${isMe ? "justify-end" : "justify-start"}`}>
+          <div
+            key={message.id}
+            className={`flex mb-2 items-center ${isMe ? "justify-end" : "justify-start"}`}
+          >
             {
-              <div className="flex flex-col justify-center">
+              <div className="flex flex-col justify-center items-center mr-2">
                 <ChatAvatar
-                  src={activeConversation.user.avatar}
-                  alt={activeConversation.user.name}
+                  src={
+                    activeConversation?.user?.avatar
+                      ? activeConversation.user.avatar
+                      : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face"
+                  }
+                  alt={activeConversation?.user?.name || "User avatar"}
                   size="sm"
                 />
               </div>
             }
-            <div>
+            <div className="h-full">
               <MessageBubble message={message} />
             </div>
           </div>

@@ -20,7 +20,7 @@ interface ChatState {
   addMessage: (message: Message) => void;
   updateConversationLastMessage: (
     conversationId: string,
-    message: ApiMessage
+    message: ApiMessage,
   ) => void;
   setUsers: (users: ApiUser[]) => void;
   setLoading: (loading: boolean) => void;
@@ -31,7 +31,7 @@ interface ChatState {
 // Helper functions
 export const toUIConversation = (
   conv: ApiConversation,
-  userId: string
+  userId: string,
 ): Conversation => {
   const otherUser = conv.participants.find((p) => p._id !== userId);
   return {
@@ -89,7 +89,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addMessage: (message) =>
     set((state) => {
-      // Không thêm nếu tin nhắn đã tồn tại
       if (state.messages.find((m) => m.id === message.id)) {
         return state;
       }
@@ -108,7 +107,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 minute: "2-digit",
               }),
             }
-          : conv
+          : conv,
       ),
     })),
 
@@ -118,7 +117,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addConversation: (conversation) =>
     set((state) => {
-      // Không thêm nếu conversation đã tồn tại
       if (state.conversations.find((c) => c.id === conversation.id)) {
         return state;
       }
