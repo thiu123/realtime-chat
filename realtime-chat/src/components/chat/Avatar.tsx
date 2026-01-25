@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface AvatarProps {
-  src: string;
+  src?: string;
   alt: string;
   size?: "sm" | "md" | "lg";
   online?: boolean;
@@ -23,20 +23,32 @@ export function ChatAvatar({
 }: AvatarProps) {
   return (
     <div className="relative shrink-0">
-      <img
-        src={src}
-        alt={alt}
-        className={cn(
-          "rounded-full object-cover",
-          sizeClasses[size],
-          className
-        )}
-      />
+      {src ? (
+        <img
+          src={src}
+          alt={alt}
+          className={cn(
+            "rounded-full object-cover",
+            sizeClasses[size],
+            className,
+          )}
+        />
+      ) : (
+        <div
+          className={cn(
+            "rounded-full bg-zinc-700 flex items-center justify-center text-white font-medium",
+            sizeClasses[size],
+            className,
+          )}
+        >
+          {alt.charAt(0).toUpperCase()}
+        </div>
+      )}
       {online !== undefined && (
         <span
           className={cn(
             "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card",
-            online ? "bg-online" : "bg-muted-foreground"
+            online ? "bg-online" : "bg-muted-foreground",
           )}
         />
       )}

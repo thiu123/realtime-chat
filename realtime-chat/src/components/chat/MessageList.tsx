@@ -1,17 +1,13 @@
 import { MessageBubble } from "./MessageBubble";
-import { ChatAvatar } from "./Avatar";
 import { useEffect, useRef } from "react";
 import { useChatStore } from "@/stores/chat.store";
 import { useAuthStore } from "@/stores/auth.store";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { format, isToday, isYesterday } from "date-fns";
 
 export function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const messages = useChatStore((state) => state.messages);
-  const activeConversation = useChatStore((state) =>
-    state.activeConversation(),
-  );
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   useEffect(() => {
@@ -20,45 +16,65 @@ export function MessageList() {
     }
   }, [messages]);
 
-  if (!activeConversation || !currentUserId) return null;
+  if (!currentUserId) return null;
+
+  // Group messages by date
+  const groupedMessages: { [key: string]: typeof messages } = {};
+  messages.forEach((msg) => {
+    const date = new Date(msg.timestamp);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      // Skip invalid dates or use current date as fallback
+      return;
+    }
+
+    let dateLabel = format(date, "MMM dd, yyyy");
+
+    if (isToday(date)) {
+      dateLabel = "TODAY, " + format(date, "MMM dd").toUpperCase();
+    } else if (isYesterday(date)) {
+      dateLabel = "YESTERDAY";
+    }
+
+    if (!groupedMessages[dateLabel]) {
+      groupedMessages[dateLabel] = [];
+    }
+    groupedMessages[dateLabel].push(msg);
+  });
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 overflow-y-auto scrollbar-thin p-4"
-    >
-      {messages.length === 0 && (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
-          <p>Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện!</p>
-        </div>
-      )}
-      {messages.map((message) => {
-        const isMe = message.senderId === currentUserId;
-        return (
-          <div
-            key={message.id}
-            className={`flex mb-2 items-center ${isMe ? "justify-end" : "justify-start"}`}
-          >
-            {
-              <div className="flex flex-col justify-center items-center mr-2">
-                <ChatAvatar
-                  src={
-                    activeConversation?.user?.avatar
-                      ? activeConversation.user.avatar
-                      : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face"
-                  }
-                  alt={activeConversation?.user?.name || "User avatar"}
-                  size="sm"
-                />
-              </div>
-            }
-            <div className="h-full">
-              <MessageBubble message={message} />
-            </div>
+    <ScrollArea className="flex-1 bg-zinc-950">
+      <div className="p-6">
+        {Object.keys(groupedMessages).length === 0 ? (
+          <div className="flex items-center justify-center h-full text-zinc-500">
+            <p>No messages yet. Start the conversation!</p>
           </div>
-        );
-      })}
-      <div ref={messagesEndRef} />
-    </div>
+        ) : (
+          Object.entries(groupedMessages).map(([date, msgs]) => (
+            <div key={date} className="mb-6">
+              <div className="flex items-center justify-center mb-4">
+                <span className="text-xs text-zinc-500 bg-zinc-900 px-3 py-1 rounded-full">
+                  {date}
+                </span>
+              </div>
+
+              {msgs.map((message) => {
+                const isMe = message.senderId === currentUserId;
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex mb-4 ${isMe ? "justify-end" : "justify-start"}`}
+                  >
+                    <MessageBubble message={message} isMe={isMe} />
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+    </ScrollArea>
   );
 }

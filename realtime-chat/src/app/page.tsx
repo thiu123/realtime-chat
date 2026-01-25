@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { AppSidebar } from "@/components/chat/AppSidebar";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { UserDetailPanel } from "@/components/chat/UserDetailPanel";
 import { useAuthStore } from "@/stores/auth.store";
 import {
   useChatStore,
@@ -14,9 +16,13 @@ import {
   getConversations,
   getMessages,
   getUsers,
-  createOrGetConversation,
   ApiMessage,
 } from "@/services/chat.service";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 
 const Index = () => {
   const router = useRouter();
@@ -36,7 +42,6 @@ const Index = () => {
     updateConversationLastMessage,
     setUsers,
     setLoading,
-    addConversation,
   } = useChatStore();
 
   useEffect(() => {
@@ -59,7 +64,7 @@ const Index = () => {
 
         setUsers(usersData.filter((u) => u._id !== user.id));
         const formattedConvs = conversationsData.map((c) =>
-          toUIConversation(c, user.id)
+          toUIConversation(c, user.id),
         );
         setConversations(formattedConvs);
 
@@ -133,52 +138,63 @@ const Index = () => {
         content,
       });
     },
-    [user, activeConversationId]
+    [user, activeConversationId],
   );
-
-  // Bắt đầu chat với user
-  // const handleStartChat = useCallback(async (participantId: string) => {
-  //   if (!user) return;
-
-  //   try {
-  //     const conversation = await createOrGetConversation(
-  //       user.id,
-  //       participantId
-  //     );
-  //     const formatted = toUIConversation(conversation, user.id);
-
-  //     addConversation(formatted);
-  //     setActiveConversationId(formatted.id);
-  //   } catch (error) {
-  //     console.error("Error:", error);
-  //   }
-  // }, [user][(user, addConversation, setActiveConversationId)]);
 
   if (!user) return null;
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        Đang tải...
+      <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
+        Loading...
       </div>
     );
   }
 
-  return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <div className="flex flex-col w-95 border-r border-border bg-card">
-        <ConversationList />
-      </div>
+  const currentConv = activeConversation();
 
-      {activeConversation() ? (
-        <ChatPanel onSendMessage={handleSendMessage} />
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <p className="text-muted-foreground">
-            Chọn một cuộc trò chuyện hoặc bắt đầu chat mới
-          </p>
-        </div>
-      )}
+  return (
+    <div className="h-screen w-full overflow-hidden bg-zinc-950">
+      <ResizablePanelGroup direction="horizontal">
+        {/* Left Navigation Sidebar */}
+        <ResizablePanel
+          defaultSize={5}
+          minSize={4}
+          maxSize={6}
+          className="min-w-16"
+        >
+          <AppSidebar currentUser={user} />
+        </ResizablePanel>
+
+        <ResizableHandle className="w-px bg-zinc-800" />
+
+        {/* Conversation List */}
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+          <ConversationList />
+        </ResizablePanel>
+
+        <ResizableHandle className="w-px bg-zinc-800" />
+
+        {/* Main Chat Panel */}
+        <ResizablePanel defaultSize={50} minSize={30}>
+          <ChatPanel onSendMessage={handleSendMessage} />
+        </ResizablePanel>
+
+        {/* User Detail Panel */}
+        {currentConv && (
+          <>
+            <ResizableHandle className="w-px bg-zinc-800" />
+            <ResizablePanel
+              defaultSize={25}
+              minSize={20}
+              maxSize={35}
+              className="hidden lg:block"
+            >
+              <UserDetailPanel user={currentConv.user} />
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
     </div>
   );
 };

@@ -9,16 +9,26 @@ interface ChatPanelProps {
 
 export function ChatPanel({ onSendMessage }: ChatPanelProps) {
   const activeConversation = useChatStore((state) =>
-    state.activeConversation()
+    state.activeConversation(),
   );
 
-  if (!activeConversation) return null;
+  if (!activeConversation) {
+    return (
+      <div className="flex items-center justify-center bg-zinc-950 text-zinc-500">
+        <p>Select a conversation to start chatting</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background">
+    <div className="flex-1 flex flex-col h-full bg-zinc-950">
       <ChatHeader user={activeConversation.user} />
       <MessageList />
-      <MessageInput onSend={onSendMessage} />
+      <MessageInput
+        onSend={onSendMessage}
+        isTyping={false}
+        typingUser="Sarah"
+      />
     </div>
   );
 }

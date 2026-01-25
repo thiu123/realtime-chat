@@ -1,71 +1,53 @@
 import { cn } from "@/lib/utils";
 import { Message } from "@/types/chat";
-import { MessageReactions } from "./MessageReactions";
-import { LinkPreviewCard } from "./LinkPreviewCard";
-import { ImageGrid } from "./ImageGrid";
 import { Check, CheckCheck } from "lucide-react";
+import { format } from "date-fns";
 
 interface MessageBubbleProps {
   message: Message;
+  isMe: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
-  const isEmoji = message.type === "emoji";
+export function MessageBubble({ message, isMe }: MessageBubbleProps) {
+  const date = new Date(message.timestamp);
+  const timeStr = !isNaN(date.getTime()) ? format(date, "HH:mm") : "00:00";
 
   return (
-    <div className={cn("flex flex-col mb-4 animate-fade-in")}>
+    <div className={cn("flex flex-col mb-3 max-w-md", isMe && "items-end")}>
       <div
-      // className={cn(
-      //   "max-w-md",
-      //   !isEmoji && "px-4 py-2.5 rounded-2xl",
-
-      //   !isEmoji && "bg-chat-sent text-primary-foreground rounded-br-sm",
-
-      //   !isEmoji && "bg-chat-received text-foreground rounded-bl-sm"
-      // )}
+        className={cn(
+          "px-4 py-2.5 rounded-2xl text-sm",
+          isMe
+            ? "bg-blue-600 text-white rounded-br-md"
+            : "bg-zinc-800 text-white rounded-bl-md",
+        )}
       >
-        {/* {message.type === "emoji" && (
-          <span className="text-5xl">{message.content}</span>
-        )} */}
+        {message.images && message.images.length > 0 && message.images[0] && (
+          <div className="mb-2 rounded-lg overflow-hidden">
+            <img
+              src={message.images[0]}
+              alt="Shared image"
+              className="max-w-xs rounded-lg"
+            />
+          </div>
+        )}
 
-        {<p className="text-sm leading-relaxed">{message.content}</p>}
-
-        {/* {message.type === "link" && (
-          <>
-            {message.content && (
-              <p className="text-sm mb-1">{message.content}</p>
-            )}
-            {message.link && (
-              <a
-                href={message.link}
-                className="text-link text-sm break-all hover:underline"
-              >
-                {message.link}
-              </a>
-            )}
-            {message.linkPreview && (
-              <LinkPreviewCard preview={message.linkPreview} />
-            )}
-          </>
-        )} */}
-
-        {/* {message.type === "image" && message.images && (
-          <ImageGrid images={message.images} caption={message.content} />
-        )} */}
+        {message.content && (
+          <p className="leading-relaxed whitespace-pre-wrap wrap-break-word">
+            {message.content}
+          </p>
+        )}
       </div>
 
-      {/* {message.reactions && <MessageReactions reactions={message.reactions} />} */}
-
-      {/* <div className="flex items-center gap-1 mt-1">
-        <span className="text-xs text-muted-foreground">
-          {message.timestamp}
-        </span>
-        {message.read ? (
-          <CheckCheck className="w-4 h-4 text-primary" />
-        ) : (
-          <Check className="w-4 h-4 text-muted-foreground" />
-        )}
-      </div> */}
+      <div className="flex items-center gap-1 mt-1 px-1">
+        <span className="text-xs text-zinc-500">{timeStr}</span>
+        {isMe &&
+          (message.read ? (
+            <CheckCheck className="w-3 h-3 text-blue-500" />
+          ) : (
+            <Check className="w-3 h-3 text-zinc-500" />
+          ))}
+      </div>
     </div>
   );
 }

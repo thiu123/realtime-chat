@@ -59,10 +59,7 @@ export const toUIMessage = (msg: ApiMessage): Message => {
     senderId: sender?._id || (msg.senderId as string),
     content: msg.content,
     type: "text",
-    timestamp: new Date(msg.createdAt).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
+    timestamp: msg.createdAt, // Keep as ISO string for proper date handling
   };
 };
 
