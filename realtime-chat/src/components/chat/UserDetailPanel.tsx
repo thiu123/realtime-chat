@@ -41,7 +41,7 @@ const sharedFiles = [
 
 export function UserDetailPanel({ user }: UserDetailPanelProps) {
   return (
-    <div className="w-full bg-zinc-900 border-l border-zinc-800 flex flex-col">
+    <div className="w-full h-full bg-zinc-900 border-l border-zinc-800 flex flex-col">
       <ScrollArea className="flex-1">
         <div className="p-6">
           {/* Profile Card */}

@@ -59,7 +59,7 @@ export const toUIMessage = (msg: ApiMessage): Message => {
     senderId: sender?._id || (msg.senderId as string),
     content: msg.content,
     type: "text",
-    timestamp: msg.createdAt, // Keep as ISO string for proper date handling
+    timestamp: msg.createdAt,
   };
 };
 

@@ -18,14 +18,11 @@ export function MessageList() {
 
   if (!currentUserId) return null;
 
-  // Group messages by date
   const groupedMessages: { [key: string]: typeof messages } = {};
   messages.forEach((msg) => {
     const date = new Date(msg.timestamp);
 
-    // Check if date is valid
     if (isNaN(date.getTime())) {
-      // Skip invalid dates or use current date as fallback
       return;
     }
 

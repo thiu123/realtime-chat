@@ -1,5 +1,4 @@
 "use client";
-
 import {
   LayoutDashboard,
   MessageSquare,
@@ -57,15 +56,11 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               title={item.label}
             >
               <Icon className="w-5 h-5" />
-              {isActive && (
-                <div className="absolute left-0 w-1 h-8 bg-blue-600 rounded-r-full" />
-              )}
             </button>
           );
         })}
       </nav>
 
-      {/* User Avatar */}
       <div className="mt-4">
         <Avatar className="w-10 h-10 cursor-pointer ring-2 ring-zinc-800 hover:ring-blue-600 transition-all">
           <AvatarImage src={currentUser?.avatar || undefined} />

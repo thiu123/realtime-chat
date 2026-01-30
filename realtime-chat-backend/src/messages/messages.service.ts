@@ -47,7 +47,7 @@ export class MessagesService {
   async findOne(messageId: string) {
     const message = await this.messageModel
       .findById(messageId)
-      .populate('senderId', 'username email')
+      .populate('senderId', 'name email')
       .exec();
 
     if (!message) {
