@@ -25,45 +25,45 @@ class SocketService {
     });
 
     this.socket.on("connect", () => {
-      console.log("✅ Socket connected:", this.socket?.id);
-      console.log("🔌 Socket URL:", SOCKET_URL);
+      console.log("Socket connected:", this.socket?.id);
+      console.log("Socket URL:", SOCKET_URL);
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.log("❌ Socket disconnected:", reason);
+      console.log("Socket disconnected:", reason);
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("🔴 Socket connection error:", error.message);
-      console.error("🔴 Socket URL:", SOCKET_URL);
+      console.error("Socket connection error:", error.message);
+      console.error("Socket URL:", SOCKET_URL);
     });
 
     this.socket.on("error", (error) => {
-      console.error("🔴 Socket error:", error);
+      console.error("Socket error:", error);
     });
   }
 
-  disconnect() {
+  disconnect() {  
     this.socket?.disconnect();
     this.socket = null;
   }
 
   emit(event: string, payload?: any) {
     if (!this.socket) {
-      console.error("🔴 Cannot emit - socket not initialized");
+      console.error("Cannot emit - socket not initialized");
       return;
     }
 
     if (!this.socket.connected) {
-      console.error("🔴 Cannot emit - socket not connected");
-      console.error("🔴 Socket state:", {
+      console.error("Cannot emit - socket not connected");
+      console.error("Socket state:", {
         connected: this.socket.connected,
         disconnected: this.socket.disconnected,
       });
       return;
     }
 
-    console.log(`📡 Emitting event: ${event}`, payload);
+    console.log(`Emitting event: ${event}`, payload);
     this.socket.emit(event, payload);
   }
 

@@ -12,7 +12,7 @@ export class MessagesService {
   ) {}
 
   /**
-   * 📝 CREATE - Tạo tin nhắn mới
+   * CREATE - Tạo tin nhắn mới
    * @param senderId - ID người gửi
    * @param createMessageDto - Dữ liệu tin nhắn (conversationId, content)
    */
@@ -23,13 +23,11 @@ export class MessagesService {
     });
 
     const savedMessage = await newMessage.save();
-
-    // Populate thông tin người gửi để trả về đầy đủ
     return await savedMessage.populate('senderId', 'name email avatar');
   }
 
   /**
-   * 📖 READ - Lấy tất cả tin nhắn của 1 cuộc trò chuyện
+   * READ - Lấy tất cả tin nhắn của 1 cuộc trò chuyện
    * @param conversationId - ID cuộc trò chuyện
    */
   async findByConversation(conversationId: string) {
@@ -41,7 +39,7 @@ export class MessagesService {
   }
 
   /**
-   * 🔍 READ - Lấy 1 tin nhắn cụ thể
+   *  READ - Lấy 1 tin nhắn cụ thể
    * @param messageId - ID tin nhắn
    */
   async findOne(messageId: string) {
@@ -58,7 +56,7 @@ export class MessagesService {
   }
 
   /**
-   * ✏️ UPDATE - Sửa nội dung tin nhắn
+   * UPDATE - Sửa nội dung tin nhắn
    * @param messageId - ID tin nhắn
    * @param senderId - ID người gửi (để check quyền)
    * @param content - Nội dung mới
@@ -66,7 +64,7 @@ export class MessagesService {
   async update(messageId: string, senderId: string, content: string) {
     const message = await this.messageModel.findOne({
       _id: messageId,
-      senderId, // Chỉ cho phép người gửi sửa tin nhắn của mình
+      senderId,
     });
 
     if (!message) {
@@ -78,11 +76,11 @@ export class MessagesService {
     message.content = content;
     const updatedMessage = await message.save();
 
-    return await updatedMessage.populate('senderId', 'username email');
+    return await updatedMessage.populate('senderId', 'name email');
   }
 
   /**
-   * 🗑️ DELETE - Xóa tin nhắn
+   * DELETE - Xóa tin nhắn
    * @param messageId - ID tin nhắn
    * @param senderId - ID người gửi (để check quyền)
    */

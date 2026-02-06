@@ -30,7 +30,6 @@ const Index = () => {
   const accessToken = useAuthStore((state) => state.accessToken);
   const hasHydrated = useAuthStore((state) => state._hasHydrated);
 
-  // Chat store
   const {
     activeConversationId,
     loading,
@@ -94,7 +93,6 @@ const Index = () => {
     return () => socketService.disconnect();
   }, [accessToken]);
 
-  // Load messages khi chọn conversation
   useEffect(() => {
     if (!activeConversationId) return;
 
@@ -127,7 +125,6 @@ const Index = () => {
     return () => socketService.off("newMessage");
   }, [activeConversationId, addMessage, updateConversationLastMessage]);
 
-  // Gửi tin nhắn
   const handleSendMessage = useCallback(
     (content: string) => {
       if (!user || !activeConversationId) return;
@@ -156,7 +153,6 @@ const Index = () => {
   return (
     <div className="h-screen w-full overflow-hidden bg-zinc-950">
       <ResizablePanelGroup direction="horizontal">
-        {/* Left Navigation Sidebar */}
         <ResizablePanel
           defaultSize={5}
           minSize={4}
@@ -168,19 +164,16 @@ const Index = () => {
 
         <ResizableHandle className="w-px bg-zinc-800" />
 
-        {/* Conversation List */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
           <ConversationList />
         </ResizablePanel>
 
         <ResizableHandle className="w-px bg-zinc-800" />
 
-        {/* Main Chat Panel */}
         <ResizablePanel defaultSize={50} minSize={30}>
           <ChatPanel onSendMessage={handleSendMessage} />
         </ResizablePanel>
 
-        {/* User Detail Panel */}
         {currentConv && (
           <>
             <ResizableHandle className="w-px bg-zinc-800" />

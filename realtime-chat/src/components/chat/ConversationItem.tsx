@@ -26,7 +26,7 @@ export function ConversationItem({
           : "hover:bg-zinc-800/50",
       )}
     >
-      <ChatAvatar src={user.avatar} alt={user.name} online={user.online} />
+      <ChatAvatar src={user?.avatar} alt={user?.name} online={user?.online} />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
@@ -36,7 +36,7 @@ export function ConversationItem({
               isActive ? "text-white" : "text-zinc-200",
             )}
           >
-            {user.name}
+            {user?.name}
           </h3>
           <span className="text-xs text-zinc-500 shrink-0 ml-2">
             {timestamp}

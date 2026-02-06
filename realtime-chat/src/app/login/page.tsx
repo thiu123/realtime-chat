@@ -61,12 +61,9 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen bg-zinc-950">
-      {/* Left Column - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-cyan-600 via-blue-600 to-blue-700 p-12 flex-col justify-between relative overflow-hidden">
-        {/* Background decoration */}
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
 
-        {/* Logo and Brand */}
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">
             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
@@ -239,7 +236,6 @@ export default function Login() {
               )}
             </Button>
 
-            {/* Divider */}
             <div className="relative my-6">
               <Separator className="bg-zinc-800" />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-950 px-4 text-sm text-zinc-500">
@@ -247,7 +243,6 @@ export default function Login() {
               </span>
             </div>
 
-            {/* Social Buttons */}
             <div className="grid grid-cols-2 gap-3">
               <Button
                 type="button"

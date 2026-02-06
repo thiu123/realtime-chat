@@ -48,7 +48,7 @@ export class ConversationsService {
       .find({
         participants: userId,
       })
-      .populate('participants', 'username email avatar')
+      .populate('participants', 'name email avatar')
       .populate('lastMessage')
       .sort({ lastMessageAt: -1 })
       .exec();
@@ -74,7 +74,7 @@ export class ConversationsService {
   async findById(conversationId: string): Promise<Conversation | null> {
     return this.conversationModel
       .findById(conversationId)
-      .populate('participants', 'username email avatar')
+      .populate('participants', 'name email avatar')
       .populate('lastMessage')
       .exec();
   }

@@ -22,7 +22,6 @@ export function ConversationList() {
   const {
     conversations,
     activeConversationId,
-    users,
     setActiveConversationId,
     addConversation,
   } = useChatStore();
@@ -60,7 +59,7 @@ export function ConversationList() {
       return matchesSearch && conv.unreadCount && conv.unreadCount > 0;
     }
     if (activeFilter === "groups") {
-      return false; // Implement group logic if needed
+      return false;
     }
     return matchesSearch;
   });

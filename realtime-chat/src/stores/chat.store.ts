@@ -28,7 +28,6 @@ interface ChatState {
   reset: () => void;
 }
 
-// Helper functions
 export const toUIConversation = (
   conv: ApiConversation,
   userId: string,
@@ -42,7 +41,7 @@ export const toUIConversation = (
       avatar: otherUser?.avatar || "",
       online: false,
     },
-    lastMessage: conv.lastMessage?.content || "Chưa có tin nhắn",
+    lastMessage: conv.lastMessage?.content || "No messages yet",
     timestamp: conv.lastMessageAt
       ? new Date(conv.lastMessageAt).toLocaleTimeString([], {
           hour: "numeric",
