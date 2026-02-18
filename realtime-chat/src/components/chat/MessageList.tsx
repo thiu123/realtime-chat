@@ -41,7 +41,7 @@ export function MessageList() {
   });
 
   return (
-    <ScrollArea className="flex-1 bg-zinc-950">
+    <ScrollArea className="flex-1 h-full bg-zinc-950">
       <div className="p-6">
         {Object.keys(groupedMessages).length === 0 ? (
           <div className="flex items-center justify-center h-full text-zinc-500">
