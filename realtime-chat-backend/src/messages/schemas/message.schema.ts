@@ -3,8 +3,11 @@ import { HydratedDocument, Types } from 'mongoose';
 
 export type MessageDocument = HydratedDocument<Message>;
 
+// Các loại tin nhắn được hỗ trợ
 export enum MessageType {
-  TEXT = 'text',
+  TEXT = 'text',   // Tin nhắn văn bản thông thường
+  EMOJI = 'emoji', // Tin nhắn chỉ gồm emoji
+  IMAGE = 'image', // Tin nhắn hình ảnh
 }
 
 @Schema({ timestamps: true })
@@ -23,8 +26,13 @@ export class Message {
   @Prop({ type: String, enum: MessageType, default: MessageType.TEXT })
   type: MessageType;
 
-  @Prop({ type: String, required: true })
+  // Nội dung văn bản (không bắt buộc nếu là tin nhắn ảnh)
+  @Prop({ type: String, required: false, default: '' })
   content: string;
+
+  // Lưu ảnh dạng base64 string (cho tin nhắn hình ảnh)
+  @Prop({ type: String, required: false })
+  imageUrl: string;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

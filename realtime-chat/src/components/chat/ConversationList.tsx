@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { createOrGetConversation } from "@/services/chat.service";
 import { toUIConversation } from "@/stores/chat.store";
 import { cn } from "@/lib/utils";
+import { ContactsModal } from "./ContactsModal";
 
 export function ConversationList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,10 +47,6 @@ export function ConversationList() {
     [user, addConversation, setActiveConversationId],
   );
 
-  const handleSelectUser = (userId: string) => {
-    handleStartChat(userId);
-  };
-
   const filteredConversations = conversations.filter((conv) => {
     const matchesSearch =
       conv.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -72,7 +69,12 @@ export function ConversationList() {
     <div className="w-full h-full bg-zinc-900 border-r border-zinc-800 flex flex-col">
       {/* Header */}
       <div className="p-6 border-b border-zinc-800">
-        <h1 className="text-2xl font-semibold text-white mb-4">Messages</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-semibold text-white">Messages</h1>
+        </div>
+
+        {/* Nút tạo cuộc trò chuyện mới - gọi Modal danh bạ */}
+        <ContactsModal onSelectUser={handleStartChat} />
 
         {/* Search Bar */}
         <div className="relative mb-4">
@@ -111,26 +113,18 @@ export function ConversationList() {
           >
             Unread {unreadCount > 0 && `(${unreadCount})`}
           </Badge>
-          <Badge
-            variant={activeFilter === "groups" ? "default" : "secondary"}
-            className={cn(
-              "cursor-pointer px-4 py-1 rounded-full",
-              activeFilter === "groups"
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300",
-            )}
-            onClick={() => setActiveFilter("groups")}
-          >
-            Groups
-          </Badge>
         </div>
       </div>
 
       {/* Conversation List */}
       <ScrollArea className="flex-1 px-2">
         {filteredConversations.length === 0 ? (
-          <div className="text-center text-zinc-400 py-8">
-            {searchQuery ? "No conversations found" : "No conversations yet"}
+          <div className="text-center text-zinc-400 py-12 px-4 flex flex-col items-center justify-center">
+            <div className="w-16 h-16 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
+              <Search className="w-6 h-6 text-zinc-500" />
+            </div>
+            <p className="font-medium text-zinc-300">No messages yet</p>
+            <p className="text-sm mt-1">Click "New Chat" to start</p>
           </div>
         ) : (
           filteredConversations.map((conversation) => (

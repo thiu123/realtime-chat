@@ -57,8 +57,11 @@ export const toUIMessage = (msg: ApiMessage): Message => {
     id: msg._id,
     senderId: sender?._id || (msg.senderId as string),
     content: msg.content,
-    type: "text",
+    // Map type từ API ('text' | 'emoji' | 'image') sang UI type
+    type: (msg.type as "text" | "image" | "emoji") || "text",
     timestamp: msg.createdAt,
+    // Map imageUrl từ API để hiển thị ảnh trong MessageBubble
+    imageUrl: msg.imageUrl,
   };
 };
 

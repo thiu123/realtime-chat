@@ -12,7 +12,6 @@ import { AppService } from './app.service';
 
 @Module({
   imports: [
-    // Load .env
     ConfigModule.forRoot({
       isGlobal: true,
     }),

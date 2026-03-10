@@ -54,10 +54,11 @@ export default function Login() {
   useEffect(() => {
     if (user) {
       socketService.connect(accessToken || undefined);
+      router.push("/"); // Đã login thì chuyển vào trang chủ
     } else {
       socketService.disconnect();
     }
-  }, [user, accessToken]);
+  }, [user, accessToken, router]);
 
   return (
     <div className="flex min-h-screen bg-zinc-950">

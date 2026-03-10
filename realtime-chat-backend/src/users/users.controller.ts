@@ -35,6 +35,19 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
+  /**
+   * Cập nhật avatar của user
+   * Client gửi: { avatar: "data:image/png;base64,..." }
+   */
+  @Patch(':id/avatar')
+  updateAvatar(
+    @Param('id') id: string,
+    @Body() body: { avatar: string },
+  ) {
+    // Dùng lại hàm update có sẵn, chỉ cập nhật trường avatar
+    return this.usersService.update(id, { avatar: body.avatar });
+  }
+
   @Delete(':id')
   deleteUser(@Param('id') id: string) {
     return this.usersService.remove(id);

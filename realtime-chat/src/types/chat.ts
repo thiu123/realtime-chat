@@ -25,7 +25,8 @@ export interface Message {
   content?: string;
   timestamp: string;
   type: 'text' | 'image' | 'link' | 'emoji';
-  images?: string[];
+  images?: string[];       // Ảnh cũ (giữ lại để tương thích)
+  imageUrl?: string;       // Ảnh mới dạng base64 (từ feature này)
   link?: string;
   linkPreview?: LinkPreview;
   reactions?: Reaction[];

@@ -126,13 +126,15 @@ const Index = () => {
   }, [activeConversationId, addMessage, updateConversationLastMessage]);
 
   const handleSendMessage = useCallback(
-    (content: string) => {
+    (content: string, type?: string, imageUrl?: string) => {
       if (!user || !activeConversationId) return;
 
       socketService.emit("sendMessage", {
         conversationId: activeConversationId,
         senderId: user.id,
         content,
+        type,        // Gửi loại tin nhắn (text, emoji, image)
+        imageUrl,    // Gửi ảnh dạng base64 (nếu có)
       });
     },
     [user, activeConversationId],

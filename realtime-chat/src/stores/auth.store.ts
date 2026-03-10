@@ -18,6 +18,8 @@ interface AuthActions {
   setAuth: (user: AuthUser, token: string) => void;
   clearAuth: () => void;
   setHasHydrated: (hasHydrated: boolean) => void;
+  // Cập nhật avatar sau khi user upload ảnh mới
+  updateAvatar: (avatarUrl: string) => void;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -40,6 +42,12 @@ export const useAuthStore = create<AuthStore>()(
           user: null,
           accessToken: null,
         }),
+
+      // Cập nhật avatar trong store (để UI cập nhật ngay lập tức)
+      updateAvatar: (avatarUrl) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, avatar: avatarUrl } : null,
+        })),
 
       setHasHydrated: (hasHydrated) => set({ _hasHydrated: hasHydrated }),
     }),

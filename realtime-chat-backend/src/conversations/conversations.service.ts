@@ -37,7 +37,8 @@ export class ConversationsService {
       participants: [userId, participantId],
     });
 
-    return newConversation.save();
+    await newConversation.save();
+    return newConversation.populate('participants', 'name email avatar');
   }
 
   /**
@@ -65,6 +66,8 @@ export class ConversationsService {
       .findOne({
         participants: { $all: [userId1, userId2] },
       })
+      .populate('participants', 'name email avatar')
+      .populate('lastMessage')
       .exec();
   }
 

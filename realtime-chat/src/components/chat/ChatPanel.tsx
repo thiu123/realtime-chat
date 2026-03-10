@@ -4,7 +4,7 @@ import { MessageInput } from "./MessageInput";
 import { useChatStore } from "@/stores/chat.store";
 
 interface ChatPanelProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, type?: string, imageUrl?: string) => void;
 }
 
 export function ChatPanel({ onSendMessage }: ChatPanelProps) {

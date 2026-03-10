@@ -12,7 +12,8 @@ export interface ApiMessage {
   conversationId: string;
   senderId: ApiUser | string;
   content: string;
-  type: string;
+  type: string;        // 'text' | 'emoji' | 'image'
+  imageUrl?: string;   // Ảnh base64 (có khi type = 'image')
   createdAt: string;
   updatedAt: string;
 }
@@ -64,3 +65,19 @@ export const getMessages = async (
   const response = await api.get(`/messages/conversation/${conversationId}`);
   return response.data;
 };
+
+/**
+ * Cập nhật avatar của user
+ * @param userId - ID của user
+ * @param avatarBase64 - Ảnh dạng base64 string (vd: "data:image/png;base64,...")
+ */
+export const updateUserAvatar = async (
+  userId: string,
+  avatarBase64: string
+): Promise<ApiUser> => {
+  const response = await api.patch(`/users/${userId}/avatar`, {
+    avatar: avatarBase64,
+  });
+  return response.data;
+};
+

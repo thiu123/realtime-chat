@@ -53,19 +53,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * CREATE - Gửi tin nhắn mới (Realtime qua Socket)
-   * Client gửi: { conversationId: string, senderId: string, content: string }
+   * Client gửi: { conversationId, senderId, content?, type?, imageUrl? }
    */
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    payload: { conversationId: string; senderId: string; content: string },
+    payload: {
+      conversationId: string;
+      senderId: string;
+      content?: string;    // Nội dung text (optional với tin nhắn ảnh)
+      type?: string;       // 'text' | 'emoji' | 'image'
+      imageUrl?: string;   // Ảnh base64 (chỉ khi type = 'image')
+    },
   ) {
     try {
       // 1. Lưu tin nhắn vào database
       const newMessage = await this.messagesService.create(payload.senderId, {
         conversationId: payload.conversationId,
-        content: payload.content,
+        content: payload.content || '',
+        type: payload.type,
+        imageUrl: payload.imageUrl,
       });
 
       console.log('New message saved:', newMessage._id);

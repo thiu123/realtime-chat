@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authService } from "@/services/auth.service";
+import { useAuthStore } from "@/stores/auth.store";
 import { User, Mail, Lock, Eye, EyeOff, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -24,6 +25,14 @@ export default function Signup() {
   const [agreeToTerms, setAgreeToTerms] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+
+  const user = useAuthStore((state) => state.user);
+
+  useEffect(() => {
+    if (user) {
+      router.push("/");
+    }
+  }, [user, router]);
 
   const handleSignup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -7,6 +7,7 @@ import {
   Settings,
   LogOut,
   User,
+  Camera,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -18,9 +19,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuthStore } from "@/stores/auth.store";
 import { useRouter } from "next/navigation";
+import { updateUserAvatar } from "@/services/chat.service";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", id: "dashboard" },
@@ -39,15 +41,65 @@ interface AppSidebarProps {
 
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const [activeItem, setActiveItem] = useState("messages");
+  // Trạng thái khi đang upload ảnh (để hiện loading)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+  const updateAvatar = useAuthStore((state) => state.updateAvatar);
+
+  // Ref tới input file ẩn
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = () => {
     clearAuth();
     router.push("/login");
   };
-  
+
+  // ======================================================
+  // Xử lý khi user chọn ảnh avatar mới
+  // ======================================================
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    // Giới hạn kích thước avatar (500KB là đủ)
+    if (file.size > 500 * 1024) {
+      alert("Avatar image is too large! Please select an image under 500KB.");
+      return;
+    }
+
+    setIsUploadingAvatar(true); // Bật loading
+
+    try {
+      // Bước 1: Đọc file ảnh và chuyển sang base64 bằng FileReader
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string;
+
+        try {
+          // Bước 2: Gọi API backend để lưu avatar vào database
+          await updateUserAvatar(user.id, base64);
+
+          // Bước 3: Cập nhật avatar trong auth store → UI cập nhật ngay
+          updateAvatar(base64);
+
+          console.log("✅ Avatar updated!");
+        } catch (error) {
+          console.error("❌ Lỗi khi cập nhật avatar:", error);
+          alert("Cannot update avatar. Please try again!");
+        } finally {
+          setIsUploadingAvatar(false); // Tắt loading
+        }
+      };
+      reader.readAsDataURL(file); // Bắt đầu đọc file
+    } catch {
+      setIsUploadingAvatar(false);
+    }
+
+    // Reset để có thể chọn lại cùng file
+    e.target.value = "";
+  };
 
   return (
     <div className="w-full bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-4">
@@ -80,25 +132,35 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         })}
       </nav>
 
+      {/* Avatar ở dưới cùng — click để đổi ảnh */}
       <div className="mt-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="focus:outline-none">
-              <Avatar className="w-10 h-10 cursor-pointer ring-2 ring-zinc-800 hover:ring-blue-600 transition-all">
-                <AvatarImage
-                  src={user?.avatar || currentUser?.avatar || undefined}
-                />
-                <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white text-sm">
-                  {user?.name?.charAt(0) || currentUser?.name?.charAt(0) || "U"}
-                </AvatarFallback>
-              </Avatar>
+              {/* Bọc avatar trong div relative để đặt icon camera lên trên */}
+              <div className="relative group">
+                <Avatar className="w-10 h-10 cursor-pointer ring-2 ring-zinc-800 hover:ring-blue-600 transition-all">
+                  <AvatarImage src={user?.avatar || currentUser?.avatar || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-600 to-purple-600 text-white text-sm">
+                    {user?.name?.charAt(0) || currentUser?.name?.charAt(0) || "U"}
+                  </AvatarFallback>
+                </Avatar>
+
+                {/* Overlay camera icon khi hover — gợi ý có thể đổi avatar */}
+                {isUploadingAvatar ? (
+                  <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            side="right"
-            className="w-56 bg-zinc-900 border-zinc-800"
-          >
+
+          <DropdownMenuContent align="end" side="right" className="w-56 bg-zinc-900 border-zinc-800">
             <DropdownMenuLabel className="text-zinc-300">
               <div className="flex flex-col space-y-1">
                 <p className="text-sm font-medium leading-none">{user?.name}</p>
@@ -108,6 +170,16 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-zinc-800" />
+
+            {/* Nút đổi avatar — trigger click vào input file ẩn */}
+            <DropdownMenuItem
+              className="text-zinc-300 focus:bg-zinc-800 focus:text-white cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              <span>Change avatar</span>
+            </DropdownMenuItem>
+
             <DropdownMenuItem
               className="text-zinc-300 focus:bg-zinc-800 focus:text-white cursor-pointer"
               onClick={() => setActiveItem("profile")}
@@ -132,6 +204,15 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Input file ẩn — chỉ nhận ảnh, giới hạn 500KB */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleAvatarChange}
+          className="hidden"
+        />
       </div>
     </div>
   );
