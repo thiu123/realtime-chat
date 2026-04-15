@@ -23,6 +23,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import { MessageSquare } from "lucide-react";
 
 const Index = () => {
   const router = useRouter();
@@ -133,8 +134,8 @@ const Index = () => {
         conversationId: activeConversationId,
         senderId: user.id,
         content,
-        type,        // Gửi loại tin nhắn (text, emoji, image)
-        imageUrl,    // Gửi ảnh dạng base64 (nếu có)
+        type,
+        imageUrl,
       });
     },
     [user, activeConversationId],
@@ -144,8 +145,25 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
-        Loading...
+      <div
+        className="flex h-screen items-center justify-center noise-bg"
+        style={{ background: "var(--nx-surface-0)" }}
+      >
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center accent-gradient animate-glow-pulse"
+          >
+            <MessageSquare className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "0ms" }} />
+            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "150ms" }} />
+            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "300ms" }} />
+          </div>
+          <p className="text-sm font-medium" style={{ color: "var(--nx-text-tertiary)" }}>
+            Loading your conversations...
+          </p>
+        </div>
       </div>
     );
   }
@@ -153,7 +171,7 @@ const Index = () => {
   const currentConv = activeConversation();
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-zinc-950">
+    <div className="h-screen w-full overflow-hidden noise-bg" style={{ background: "var(--nx-surface-0)" }}>
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel
           defaultSize={5}
@@ -164,13 +182,13 @@ const Index = () => {
           <AppSidebar currentUser={user} />
         </ResizablePanel>
 
-        <ResizableHandle className="w-px bg-zinc-800" />
+        <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
 
         <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
           <ConversationList />
         </ResizablePanel>
 
-        <ResizableHandle className="w-px bg-zinc-800" />
+        <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
 
         <ResizablePanel defaultSize={50} minSize={30}>
           <ChatPanel onSendMessage={handleSendMessage} />
@@ -178,7 +196,7 @@ const Index = () => {
 
         {currentConv && (
           <>
-            <ResizableHandle className="w-px bg-zinc-800" />
+            <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
             <ResizablePanel
               defaultSize={25}
               minSize={20}

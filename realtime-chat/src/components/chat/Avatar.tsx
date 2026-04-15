@@ -36,10 +36,13 @@ export function ChatAvatar({
       ) : (
         <div
           className={cn(
-            "rounded-full bg-zinc-700 flex items-center justify-center text-white font-medium",
+            "rounded-full flex items-center justify-center text-white font-medium",
             sizeClasses[size],
             className,
           )}
+          style={{
+            background: "linear-gradient(135deg, var(--nx-accent-600), var(--nx-violet-600))",
+          }}
         >
           {alt.charAt(0).toUpperCase()}
         </div>
@@ -47,9 +50,13 @@ export function ChatAvatar({
       {online !== undefined && (
         <span
           className={cn(
-            "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-card",
-            online ? "bg-online" : "bg-muted-foreground",
+            "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2",
           )}
+          style={{
+            background: online ? "var(--nx-online)" : "var(--nx-text-ghost)",
+            borderColor: "var(--nx-surface-2)",
+            boxShadow: online ? "0 0 6px rgba(52, 211, 153, 0.4)" : "none",
+          }}
         />
       )}
     </div>

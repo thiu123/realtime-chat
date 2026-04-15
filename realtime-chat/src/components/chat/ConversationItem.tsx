@@ -20,11 +20,24 @@ export function ConversationItem({
     <div
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 p-3 cursor-pointer rounded-xl transition-all relative mb-1",
-        isActive
-          ? "bg-zinc-800 border-l-4 border-blue-600"
-          : "hover:bg-zinc-800/50",
+        "flex items-center gap-3 p-3 cursor-pointer rounded-xl transition-all duration-200 relative mb-0.5",
+        isActive ? "glow-bar-left" : "",
       )}
+      style={{
+        background: isActive
+          ? "var(--nx-glass-bg-active)"
+          : "transparent",
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.background = "transparent";
+        }
+      }}
     >
       <ChatAvatar src={user?.avatar} alt={user?.name} online={user?.online} />
 
@@ -33,28 +46,35 @@ export function ConversationItem({
           <h3
             className={cn(
               "font-medium truncate text-sm",
-              isActive ? "text-white" : "text-zinc-200",
             )}
+            style={{ color: isActive ? "white" : "var(--nx-text-primary)" }}
           >
             {user?.name}
           </h3>
-          <span className="text-xs text-zinc-500 shrink-0 ml-2">
+          <span className="text-xs shrink-0 ml-2" style={{ color: "var(--nx-text-ghost)" }}>
             {timestamp}
           </span>
         </div>
         <div className="flex items-center justify-between">
           <p
-            className={cn(
-              "text-sm truncate",
-              unreadCount && unreadCount > 0
-                ? "text-white font-medium"
-                : "text-zinc-400",
-            )}
+            className="text-sm truncate"
+            style={{
+              color: unreadCount && unreadCount > 0
+                ? "var(--nx-text-primary)"
+                : "var(--nx-text-tertiary)",
+              fontWeight: unreadCount && unreadCount > 0 ? 500 : 400,
+            }}
           >
             {lastMessage}
           </p>
           {unreadCount && unreadCount > 0 && (
-            <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-0.5 rounded-full ml-2">
+            <Badge
+              className="text-white text-xs px-2 py-0.5 rounded-full ml-2 border-0"
+              style={{
+                background: "linear-gradient(135deg, var(--nx-accent-500), var(--nx-violet-500))",
+                fontSize: "10px",
+              }}
+            >
               {unreadCount}
             </Badge>
           )}

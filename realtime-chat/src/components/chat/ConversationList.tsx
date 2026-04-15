@@ -66,75 +66,86 @@ export function ConversationList() {
   ).length;
 
   return (
-    <div className="w-full h-full bg-zinc-900 border-r border-zinc-800 flex flex-col">
+    <div
+      className="w-full h-full flex flex-col"
+      style={{
+        background: "var(--nx-surface-2)",
+        borderRight: "1px solid var(--nx-glass-border)",
+      }}
+    >
       {/* Header */}
-      <div className="p-6 border-b border-zinc-800">
+      <div className="p-5 pb-4" style={{ borderBottom: "1px solid var(--nx-glass-border)" }}>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-semibold text-white">Messages</h1>
+          <h1 className="text-xl font-semibold text-white tracking-tight">Messages</h1>
         </div>
 
-        {/* Nút tạo cuộc trò chuyện mới - gọi Modal danh bạ */}
+        {/* New Chat Button */}
         <ContactsModal onSelectUser={handleStartChat} />
 
         {/* Search Bar */}
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--nx-text-ghost)" }} />
           <Input
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-400 rounded-xl focus-visible:ring-1 focus-visible:ring-blue-600"
+            className="pl-10 text-white placeholder:text-zinc-600 rounded-xl h-10"
+            style={{
+              background: "var(--nx-surface-3)",
+              borderColor: "var(--nx-glass-border)",
+            }}
           />
         </div>
 
         {/* Filter Tabs */}
         <div className="flex gap-2">
-          <Badge
-            variant={activeFilter === "all" ? "default" : "secondary"}
-            className={cn(
-              "cursor-pointer px-4 py-1 rounded-full",
-              activeFilter === "all"
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300",
-            )}
-            onClick={() => setActiveFilter("all")}
-          >
-            All
-          </Badge>
-          <Badge
-            variant={activeFilter === "unread" ? "default" : "secondary"}
-            className={cn(
-              "cursor-pointer px-4 py-1 rounded-full",
-              activeFilter === "unread"
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300",
-            )}
-            onClick={() => setActiveFilter("unread")}
-          >
-            Unread {unreadCount > 0 && `(${unreadCount})`}
-          </Badge>
+          {(["all", "unread"] as const).map((filter) => (
+            <Badge
+              key={filter}
+              variant={activeFilter === filter ? "default" : "secondary"}
+              className={cn(
+                "cursor-pointer px-4 py-1 rounded-full text-xs font-medium transition-all duration-200",
+              )}
+              style={{
+                background: activeFilter === filter
+                  ? "linear-gradient(135deg, var(--nx-accent-600), var(--nx-violet-600))"
+                  : "var(--nx-surface-3)",
+                color: activeFilter === filter ? "white" : "var(--nx-text-secondary)",
+                border: activeFilter === filter ? "none" : "1px solid var(--nx-glass-border)",
+                boxShadow: activeFilter === filter ? "0 0 12px rgba(99, 102, 241, 0.25)" : "none",
+              }}
+              onClick={() => setActiveFilter(filter)}
+            >
+              {filter === "all" ? "All" : `Unread${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+            </Badge>
+          ))}
         </div>
       </div>
 
       {/* Conversation List */}
       <ScrollArea className="flex-1 px-2">
         {filteredConversations.length === 0 ? (
-          <div className="text-center text-zinc-400 py-12 px-4 flex flex-col items-center justify-center">
-            <div className="w-16 h-16 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
-              <Search className="w-6 h-6 text-zinc-500" />
+          <div className="text-center py-16 px-4 flex flex-col items-center justify-center">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: "var(--nx-glass-bg)", border: "1px solid var(--nx-glass-border)" }}
+            >
+              <Search className="w-6 h-6" style={{ color: "var(--nx-text-ghost)" }} />
             </div>
-            <p className="font-medium text-zinc-300">No messages yet</p>
-            <p className="text-sm mt-1">Click "New Chat" to start</p>
+            <p className="font-medium text-sm" style={{ color: "var(--nx-text-secondary)" }}>No messages yet</p>
+            <p className="text-xs mt-1" style={{ color: "var(--nx-text-ghost)" }}>Click &quot;New Chat&quot; to start</p>
           </div>
         ) : (
-          filteredConversations.map((conversation) => (
-            <ConversationItem
-              key={conversation.id}
-              conversation={conversation}
-              isActive={conversation.id === activeConversationId}
-              onClick={() => setActiveConversationId(conversation.id)}
-            />
-          ))
+          <div className="py-1">
+            {filteredConversations.map((conversation) => (
+              <ConversationItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={conversation.id === activeConversationId}
+                onClick={() => setActiveConversationId(conversation.id)}
+              />
+            ))}
+          </div>
         )}
       </ScrollArea>
     </div>

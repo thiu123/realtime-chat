@@ -34,55 +34,97 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium mb-4 rounded-xl h-11">
+        <Button
+          className="w-full text-white font-medium mb-4 rounded-xl h-11 border-0 cursor-pointer transition-all duration-300 accent-gradient hover:opacity-90"
+          style={{ boxShadow: "0 0 16px rgba(99, 102, 241, 0.2)" }}
+        >
           <UserPlus className="w-4 h-4 mr-2" />
           New Chat
         </Button>
       </DialogTrigger>
-      
-      <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800 text-white p-0 overflow-hidden rounded-2xl">
-        <DialogHeader className="p-6 border-b border-zinc-800 bg-zinc-950/50">
-          <DialogTitle className="text-xl font-semibold">New Chat</DialogTitle>
-          <p className="text-sm text-zinc-400 mt-1">Select a user to start chatting</p>
+
+      <DialogContent
+        className="sm:max-w-md text-white p-0 overflow-hidden rounded-2xl border-0"
+        style={{
+          background: "var(--nx-surface-4)",
+          border: "1px solid var(--nx-glass-border-bright)",
+          boxShadow: "0 0 60px rgba(99, 102, 241, 0.1), 0 25px 50px rgba(0, 0, 0, 0.5)",
+        }}
+      >
+        <DialogHeader
+          className="p-6"
+          style={{
+            background: "var(--nx-surface-1)",
+            borderBottom: "1px solid var(--nx-glass-border)",
+          }}
+        >
+          <DialogTitle className="text-lg font-semibold tracking-tight">New Chat</DialogTitle>
+          <p className="text-sm mt-1" style={{ color: "var(--nx-text-tertiary)" }}>
+            Select a user to start chatting
+          </p>
         </DialogHeader>
-        
-        <div className="p-4 border-b border-zinc-800">
+
+        <div className="p-4" style={{ borderBottom: "1px solid var(--nx-glass-border)" }}>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--nx-text-ghost)" }} />
             <Input
               placeholder="Search users..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 rounded-xl focus-visible:ring-1 focus-visible:ring-blue-500"
+              className="pl-9 text-white placeholder:text-zinc-600 rounded-xl"
+              style={{
+                background: "var(--nx-surface-3)",
+                borderColor: "var(--nx-glass-border)",
+              }}
             />
           </div>
         </div>
 
         <ScrollArea className="max-h-[300px] min-h-[200px] p-2">
           {filteredUsers.length === 0 ? (
-           <div className="h-full flex flex-col items-center justify-center p-8 text-zinc-500 space-y-3">
-              <div className="w-12 h-12 rounded-full border border-dashed border-zinc-700 flex items-center justify-center bg-zinc-800/20">
-                <Search className="w-5 h-5 text-zinc-600" />
+            <div className="h-full flex flex-col items-center justify-center p-8 space-y-3">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{
+                  border: "1px dashed var(--nx-glass-border-bright)",
+                  background: "var(--nx-glass-bg)",
+                }}
+              >
+                <Search className="w-5 h-5" style={{ color: "var(--nx-text-ghost)" }} />
               </div>
-              <p className="text-sm">No users found</p>
-           </div>
+              <p className="text-sm" style={{ color: "var(--nx-text-ghost)" }}>No users found</p>
+            </div>
           ) : (
             <div className="flex flex-col gap-1 p-2">
               {filteredUsers.map((user) => (
                 <button
                   key={user._id}
                   onClick={() => handleSelect(user._id)}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-zinc-800/60 transition-colors w-full text-left"
+                  className="flex items-center gap-3 p-3 rounded-xl transition-all duration-200 w-full text-left"
+                  style={{ background: "transparent" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                  }}
                 >
-                  <Avatar className="w-10 h-10 ring-2 ring-zinc-800/50">
+                  <Avatar className="w-10 h-10 ring-2" style={{ ["--tw-ring-color" as string]: "var(--nx-glass-border)" }}>
                     <AvatarImage src={user.avatar || undefined} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-600 to-cyan-600 text-white font-medium text-xs">
+                    <AvatarFallback
+                      className="text-white font-medium text-xs"
+                      style={{ background: "linear-gradient(135deg, var(--nx-accent-600), var(--nx-violet-500))" }}
+                    >
                       {user.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-zinc-200 truncate">{user.name}</h3>
-                    <p className="text-xs text-zinc-500 truncate mt-0.5">{user.email}</p>
+                    <h3 className="font-medium truncate text-sm" style={{ color: "var(--nx-text-primary)" }}>
+                      {user.name}
+                    </h3>
+                    <p className="text-xs truncate mt-0.5" style={{ color: "var(--nx-text-ghost)" }}>
+                      {user.email}
+                    </p>
                   </div>
                 </button>
               ))}

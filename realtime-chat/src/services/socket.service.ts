@@ -1,19 +1,14 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL;
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
 
 class SocketService {
   private socket: Socket | null = null;
 
   connect(token?: string) {
     if (this.socket?.connected) {
-      console.log("🔵 Socket already connected");
       return;
     }
-
-    console.log("🔌 Connecting to socket:", SOCKET_URL);
-    console.log("🔑 With token:", token ? "✓" : "✗");
 
     this.socket = io(SOCKET_URL, {
       transports: ["websocket"],
@@ -24,26 +19,18 @@ class SocketService {
       reconnectionDelay: 1000,
     });
 
-    this.socket.on("connect", () => {
-      console.log("Socket connected:", this.socket?.id);
-      console.log("Socket URL:", SOCKET_URL);
-    });
+    this.socket.on("connect", () => {});
 
-    this.socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
-    });
+    this.socket.on("disconnect", (reason) => {});
 
-    this.socket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error.message);
-      console.error("Socket URL:", SOCKET_URL);
-    });
+    this.socket.on("connect_error", (error) => {});
 
     this.socket.on("error", (error) => {
       console.error("Socket error:", error);
     });
   }
 
-  disconnect() {  
+  disconnect() {
     this.socket?.disconnect();
     this.socket = null;
   }
