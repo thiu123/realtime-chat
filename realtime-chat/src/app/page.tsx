@@ -80,6 +80,7 @@ const Index = () => {
 
     loadData();
   }, [
+    hasHydrated,
     user,
     router,
     setLoading,

@@ -73,9 +73,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         try {
           await updateUserAvatar(user.id, base64);
           updateAvatar(base64);
-          console.log("✅ Avatar updated!");
+          console.log("Avatar updated!");
         } catch (error) {
-          console.error("❌ Lỗi khi cập nhật avatar:", error);
+          console.error("Error updating avatar:", error);
           alert("Cannot update avatar. Please try again!");
         } finally {
           setIsUploadingAvatar(false);
