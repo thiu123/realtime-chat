@@ -6,28 +6,15 @@ class SocketService {
   private socket: Socket | null = null;
 
   connect(token?: string) {
-    if (this.socket?.connected) {
-      return;
-    }
+    if (this.socket?.connected) return;
 
     this.socket = io(SOCKET_URL, {
       transports: ["websocket"],
       auth: token ? { token } : undefined,
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
     });
 
     this.socket.on("connect", () => {});
-
-    this.socket.on("disconnect", (reason) => {});
-
-    this.socket.on("connect_error", (error) => {});
-
-    this.socket.on("error", (error) => {
-      console.error("Socket error:", error);
-    });
+    this.socket.on("disconnect", () => {});
   }
 
   disconnect() {
@@ -36,21 +23,7 @@ class SocketService {
   }
 
   emit(event: string, payload?: any) {
-    if (!this.socket) {
-      console.error("Cannot emit - socket not initialized");
-      return;
-    }
-
-    if (!this.socket.connected) {
-      console.error("Cannot emit - socket not connected");
-      console.error("Socket state:", {
-        connected: this.socket.connected,
-        disconnected: this.socket.disconnected,
-      });
-      return;
-    }
-
-    console.log(`Emitting event: ${event}`, payload);
+    if (!this.socket?.connected) return;
     this.socket.emit(event, payload);
   }
 
@@ -58,12 +31,12 @@ class SocketService {
     this.socket?.on(event, callback);
   }
 
-  off(event: string) {
-    this.socket?.off(event);
+  off(event: string, callback?: (data: any) => void) {
+    this.socket?.off(event, callback);
   }
 
-  isConnected(): boolean {
-    return this.socket?.connected || false;
+  isConnected() {
+    return !!this.socket?.connected;
   }
 }
 

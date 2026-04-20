@@ -18,12 +18,16 @@ import { ConversationsService } from '../conversations/conversations.service';
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(
     private messagesService: MessagesService,
     private conversationsService: ConversationsService,
   ) {}
+
+  private getErrorMessage(error: unknown) {
+    return error instanceof Error ? error.message : 'Unknown error';
+  }
 
   handleConnection(client: Socket) {
     console.log(`✅ Client connected: ${client.id}`);
@@ -38,13 +42,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Client gửi: { conversationId: string }
    */
   @SubscribeMessage('joinConversation')
-  async handleJoinConversation(
+  handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { conversationId: string },
   ) {
     const { conversationId } = payload;
 
-    client.join(conversationId);
+    void client.join(conversationId);
 
     console.log(`👥 Client ${client.id} joined conversation ${conversationId}`);
 
@@ -62,9 +66,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     payload: {
       conversationId: string;
       senderId: string;
-      content?: string;    // Nội dung text (optional với tin nhắn ảnh)
-      type?: string;       // 'text' | 'emoji' | 'image'
-      imageUrl?: string;   // Ảnh base64 (chỉ khi type = 'image')
+      content?: string; // Nội dung text (optional với tin nhắn ảnh)
+      type?: string; // 'text' | 'emoji' | 'image'
+      imageUrl?: string; // Ảnh base64 (chỉ khi type = 'image')
     },
   ) {
     try {
@@ -91,7 +95,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'sent', message: newMessage };
     } catch (error) {
       console.error('Error sending message:', error);
-      return { status: 'error', message: error.message };
+      return { status: 'error', message: this.getErrorMessage(error) };
     }
   }
 
@@ -128,7 +132,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'updated', message: updatedMessage };
     } catch (error) {
       console.error(' Error updating message:', error);
-      return { status: 'error', message: error.message };
+      return { status: 'error', message: this.getErrorMessage(error) };
     }
   }
 
@@ -163,7 +167,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'deleted', ...result };
     } catch (error) {
       console.error('Error deleting message:', error);
-      return { status: 'error', message: error.message };
+      return { status: 'error', message: this.getErrorMessage(error) };
     }
   }
 
@@ -172,7 +176,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Client gửi: { conversationId: string, userId: string, isTyping: boolean }
    */
   @SubscribeMessage('typing')
-  async handleTyping(
+  handleTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody()
     payload: {
@@ -183,6 +187,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     // Gửi cho tất cả người khác trong room (không gửi lại cho chính người gửi)
     client.to(payload.conversationId).emit('userTyping', {
+      conversationId: payload.conversationId,
       userId: payload.userId,
       isTyping: payload.isTyping,
     });

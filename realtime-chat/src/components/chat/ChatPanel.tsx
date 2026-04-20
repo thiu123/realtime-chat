@@ -6,9 +6,12 @@ import { MessageSquare } from "lucide-react";
 
 interface ChatPanelProps {
   onSendMessage: (message: string, type?: string, imageUrl?: string) => void;
+  isTyping?: boolean;
+  typingUser?: string;
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
-export function ChatPanel({ onSendMessage }: ChatPanelProps) {
+export function ChatPanel({ onSendMessage, isTyping, typingUser, onTypingChange }: ChatPanelProps) {
   const activeConversation = useChatStore((state) =>
     state.activeConversation(),
   );
@@ -48,8 +51,9 @@ export function ChatPanel({ onSendMessage }: ChatPanelProps) {
       <MessageList />
       <MessageInput
         onSend={onSendMessage}
-        isTyping={false}
-        typingUser="Sarah"
+        isTyping={isTyping}
+        typingUser={typingUser}
+        onTypingChange={onTypingChange}
       />
     </div>
   );

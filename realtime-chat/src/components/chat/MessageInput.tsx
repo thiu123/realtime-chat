@@ -1,6 +1,7 @@
 "use client";
-import { useState, useRef } from "react";
-import { Plus, Mic, Send, X, Image } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import NextImage from "next/image";
+import { Plus, Mic, Send, X, Image as ImageIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,23 +11,62 @@ interface MessageInputProps {
   onSend: (message: string, type?: string, imageUrl?: string) => void;
   isTyping?: boolean;
   typingUser?: string;
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
-export function MessageInput({ onSend, isTyping, typingUser }: MessageInputProps) {
+export function MessageInput({ onSend, isTyping, typingUser, onTypingChange }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTyping = () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    onTypingChange?.(false);
+  };
+
+  const startTyping = (value: string) => {
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+
+    onTypingChange?.(true);
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      onTypingChange?.(false);
+      typingTimeoutRef.current = null;
+    }, 1200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSend = () => {
     if (imagePreview) {
       onSend(message.trim(), "image", imagePreview);
       setMessage("");
       setImagePreview(null);
+      stopTyping();
       return;
     }
     if (message.trim()) {
       onSend(message, "text");
       setMessage("");
+      stopTyping();
     }
   };
 
@@ -90,10 +130,13 @@ export function MessageInput({ onSend, isTyping, typingUser }: MessageInputProps
       {/* Image Preview */}
       {imagePreview && (
         <div className="mb-3 relative inline-block">
-          <img
+          <NextImage
             src={imagePreview}
             alt="Image preview"
             className="max-h-32 max-w-xs rounded-xl object-cover"
+            width={320}
+            height={128}
+            unoptimized
             style={{ border: "2px solid var(--nx-accent-500)" }}
           />
           <button
@@ -105,7 +148,7 @@ export function MessageInput({ onSend, isTyping, typingUser }: MessageInputProps
             <X className="w-3.5 h-3.5" />
           </button>
           <div className="mt-1 text-xs flex items-center gap-1" style={{ color: "var(--nx-text-tertiary)" }}>
-            <Image className="w-3 h-3" />
+            <ImageIcon className="w-3 h-3" aria-hidden="true" />
             <span>Image ready to send</span>
           </div>
         </div>
@@ -145,8 +188,13 @@ export function MessageInput({ onSend, isTyping, typingUser }: MessageInputProps
         <div className="flex-1 relative">
           <Input
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setMessage(nextValue);
+              startTyping(nextValue);
+            }}
             onKeyDown={handleKeyDown}
+            onBlur={stopTyping}
             placeholder={imagePreview ? "Add caption (optional)..." : "Message..."}
             className="pr-20 pl-4 py-6 text-white placeholder:text-zinc-600 rounded-2xl"
             style={{

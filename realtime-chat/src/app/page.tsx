@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/chat/AppSidebar";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -30,6 +30,7 @@ const Index = () => {
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const hasHydrated = useAuthStore((state) => state._hasHydrated);
+  const [typingUser, setTypingUser] = useState<string | undefined>();
 
   const {
     activeConversationId,
@@ -98,6 +99,8 @@ const Index = () => {
   useEffect(() => {
     if (!activeConversationId) return;
 
+    setTypingUser(undefined);
+
     socketService.emit("joinConversation", {
       conversationId: activeConversationId,
     });
@@ -115,6 +118,28 @@ const Index = () => {
   }, [activeConversationId, setMessages]);
 
   useEffect(() => {
+    const handleUserTyping = (payload: {
+      conversationId: string;
+      userId: string;
+      isTyping: boolean;
+    }) => {
+      if (payload.conversationId !== activeConversationId) {
+        return;
+      }
+
+      if (payload.userId === user?.id) {
+        return;
+      }
+
+      if (payload.isTyping) {
+        const conversation = activeConversation();
+        setTypingUser(conversation?.user.name || "User");
+        return;
+      }
+
+      setTypingUser(undefined);
+    };
+
     const handleNewMessage = (newMsg: ApiMessage) => {
       if (newMsg.conversationId === activeConversationId) {
         addMessage(toUIMessage(newMsg));
@@ -123,9 +148,13 @@ const Index = () => {
       updateConversationLastMessage(newMsg.conversationId, newMsg);
     };
 
+    socketService.on("userTyping", handleUserTyping);
     socketService.on("newMessage", handleNewMessage);
-    return () => socketService.off("newMessage");
-  }, [activeConversationId, addMessage, updateConversationLastMessage]);
+    return () => {
+      socketService.off("userTyping");
+      socketService.off("newMessage");
+    };
+  }, [activeConversationId, activeConversation, user?.id, addMessage, updateConversationLastMessage]);
 
   const handleSendMessage = useCallback(
     (content: string, type?: string, imageUrl?: string) => {
@@ -141,6 +170,19 @@ const Index = () => {
     },
     [user, activeConversationId],
   );
+
+    const handleTypingChange = useCallback(
+      (isTyping: boolean) => {
+        if (!user || !activeConversationId) return;
+
+        socketService.emit("typing", {
+          conversationId: activeConversationId,
+          userId: user.id,
+          isTyping,
+        });
+      },
+      [user, activeConversationId],
+    );
 
   if (!user) return null;
 
@@ -169,7 +211,7 @@ const Index = () => {
     );
   }
 
-  const currentConv = activeConversation();
+  const currentConversation = activeConversation();
 
   return (
     <div className="h-screen w-full overflow-hidden noise-bg" style={{ background: "var(--nx-surface-0)" }}>
@@ -192,10 +234,15 @@ const Index = () => {
         <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
 
         <ResizablePanel defaultSize={50} minSize={30}>
-          <ChatPanel onSendMessage={handleSendMessage} />
+          <ChatPanel
+            onSendMessage={handleSendMessage}
+            isTyping={Boolean(typingUser)}
+            typingUser={typingUser}
+            onTypingChange={handleTypingChange}
+          />
         </ResizablePanel>
 
-        {currentConv && (
+        {currentConversation && (
           <>
             <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
             <ResizablePanel
@@ -204,7 +251,7 @@ const Index = () => {
               maxSize={35}
               className="hidden lg:block"
             >
-              <UserDetailPanel user={currentConv.user} />
+              <UserDetailPanel user={currentConversation.user} />
             </ResizablePanel>
           </>
         )}
