@@ -25,16 +25,15 @@ export function ChatHeader({ user }: ChatHeaderProps) {
         />
         <div>
           <h2 className="font-semibold text-white text-sm">{user?.name}</h2>
-          <p className="text-xs flex items-center gap-1.5" style={{ color: "var(--nx-online)" }}>
-            {user.online && (
-              <>
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ background: "var(--nx-online)" }}
-                />
-                Online
-              </>
-            )}
+          <p
+            className="text-xs flex items-center gap-1.5"
+            style={{ color: user.online ? "var(--nx-online)" : "var(--nx-text-tertiary)" }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: user.online ? "var(--nx-online)" : "var(--nx-text-ghost)" }}
+            />
+            {user.online ? "Online" : "Offline"}
           </p>
         </div>
       </div>

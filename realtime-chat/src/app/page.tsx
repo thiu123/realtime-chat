@@ -43,6 +43,7 @@ const Index = () => {
     updateConversationLastMessage,
     setUsers,
     setLoading,
+    setUserOnlineStatus,
   } = useChatStore();
 
   useEffect(() => {
@@ -91,12 +92,6 @@ const Index = () => {
   ]);
 
   useEffect(() => {
-    if (!accessToken) return;
-    socketService.connect(accessToken);
-    return () => socketService.disconnect();
-  }, [accessToken]);
-
-  useEffect(() => {
     if (!activeConversationId) return;
 
     setTypingUser(undefined);
@@ -118,6 +113,18 @@ const Index = () => {
   }, [activeConversationId, setMessages]);
 
   useEffect(() => {
+    if (!accessToken || !user?.id) return;
+
+    const handlePresenceUpdate = (payload: { userId: string; online: boolean }) => {
+      setUserOnlineStatus(payload.userId, payload.online);
+    };
+
+    const handlePresenceList = (payload: { onlineUserIds: string[] }) => {
+      payload.onlineUserIds.forEach((onlineUserId) => {
+        setUserOnlineStatus(onlineUserId, true);
+      });
+    };
+
     const handleUserTyping = (payload: {
       conversationId: string;
       userId: string;
@@ -148,13 +155,36 @@ const Index = () => {
       updateConversationLastMessage(newMsg.conversationId, newMsg);
     };
 
+    socketService.connect(accessToken);
+    socketService.on("presence:update", handlePresenceUpdate);
+    socketService.on("presence:list", handlePresenceList);
     socketService.on("userTyping", handleUserTyping);
     socketService.on("newMessage", handleNewMessage);
+
+    const announceOnline = () => {
+      socketService.emit("presence:online", { userId: user.id });
+    };
+
+    socketService.on("connect", announceOnline);
+    announceOnline();
+
     return () => {
+      socketService.off("connect", announceOnline);
+      socketService.off("presence:update");
+      socketService.off("presence:list");
       socketService.off("userTyping");
       socketService.off("newMessage");
+      socketService.disconnect();
     };
-  }, [activeConversationId, activeConversation, user?.id, addMessage, updateConversationLastMessage]);
+  }, [
+    accessToken,
+    user?.id,
+    activeConversationId,
+    activeConversation,
+    addMessage,
+    updateConversationLastMessage,
+    setUserOnlineStatus,
+  ]);
 
   const handleSendMessage = useCallback(
     (content: string, type?: string, imageUrl?: string) => {

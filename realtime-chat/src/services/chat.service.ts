@@ -5,6 +5,7 @@ export interface ApiUser {
   name: string;
   email: string;
   avatar?: string;
+  online?: boolean;
 }
 
 export interface ApiMessage {

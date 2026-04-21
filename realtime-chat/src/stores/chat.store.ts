@@ -25,6 +25,7 @@ interface ChatState {
   setUsers: (users: ApiUser[]) => void;
   setLoading: (loading: boolean) => void;
   addConversation: (conversation: Conversation) => void;
+  setUserOnlineStatus: (userId: string, online: boolean) => void;
   reset: () => void;
 }
 
@@ -121,6 +122,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       return { conversations: [conversation, ...state.conversations] };
     }),
+
+  setUserOnlineStatus: (userId, online) =>
+    set((state) => ({
+      conversations: state.conversations.map((conv) =>
+        conv.user.id === userId
+          ? {
+              ...conv,
+              user: {
+                ...conv.user,
+                online,
+              },
+            }
+          : conv,
+      ),
+      users: state.users.map((u) =>
+        u._id === userId
+          ? {
+              ...u,
+              online,
+            }
+          : u,
+      ),
+    })),
 
   reset: () =>
     set({
