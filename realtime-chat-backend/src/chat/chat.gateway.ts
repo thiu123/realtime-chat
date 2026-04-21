@@ -20,6 +20,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
+  private socketToUser = new Map<string, string>();
+  private userToSockets = new Map<string, Set<string>>();
+
   constructor(
     private messagesService: MessagesService,
     private conversationsService: ConversationsService,
@@ -34,7 +37,63 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
+    this.handleUserDisconnected(client.id);
     console.log(`❌ Client disconnected: ${client.id}`);
+  }
+
+  private handleUserDisconnected(socketId: string) {
+    const userId = this.socketToUser.get(socketId);
+    if (!userId) {
+      return;
+    }
+
+    this.socketToUser.delete(socketId);
+
+    const userSockets = this.userToSockets.get(userId);
+    if (!userSockets) {
+      return;
+    }
+
+    userSockets.delete(socketId);
+    const isOnline = userSockets.size > 0;
+
+    if (!isOnline) {
+      this.userToSockets.delete(userId);
+    }
+
+    this.server.emit('presence:update', {
+      userId,
+      online: isOnline,
+    });
+  }
+
+  @SubscribeMessage('presence:online')
+  handlePresenceOnline(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { userId: string },
+  ) {
+    const { userId } = payload;
+
+    if (!userId) {
+      return { status: 'error', message: 'userId is required' };
+    }
+
+    this.socketToUser.set(client.id, userId);
+
+    const existingSockets = this.userToSockets.get(userId) ?? new Set<string>();
+    existingSockets.add(client.id);
+    this.userToSockets.set(userId, existingSockets);
+
+    this.server.emit('presence:update', {
+      userId,
+      online: true,
+    });
+
+    client.emit('presence:list', {
+      onlineUserIds: Array.from(this.userToSockets.keys()),
+    });
+
+    return { status: 'ok' };
   }
 
   /**
