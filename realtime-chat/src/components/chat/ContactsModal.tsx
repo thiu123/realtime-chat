@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, PenSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useChatStore } from "@/stores/chat.store";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,13 +34,19 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          className="w-full text-white font-medium mb-4 rounded-xl h-11 border-0 cursor-pointer transition-all duration-300 accent-gradient hover:opacity-90"
-          style={{ boxShadow: "0 0 16px rgba(99, 102, 241, 0.2)" }}
+        <button
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200 cursor-pointer"
+          style={{ background: "var(--nx-surface-3)", color: "var(--nx-text-primary)" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--nx-surface-4)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--nx-surface-3)";
+          }}
+          title="New message"
         >
-          <UserPlus className="w-4 h-4 mr-2" />
-          New Chat
-        </Button>
+          <PenSquare className="w-4 h-4" />
+        </button>
       </DialogTrigger>
 
       <DialogContent

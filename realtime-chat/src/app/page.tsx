@@ -2,7 +2,6 @@
 import { useEffect, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/chat/AppSidebar";
-import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { UserDetailPanel } from "@/components/chat/UserDetailPanel";
 import { useAuthStore } from "@/stores/auth.store";
@@ -130,7 +129,8 @@ const Index = () => {
       userId: string;
       isTyping: boolean;
     }) => {
-      if (payload.conversationId !== activeConversationId) {
+      const currentActiveId = useChatStore.getState().activeConversationId;
+      if (payload.conversationId !== currentActiveId) {
         return;
       }
 
@@ -139,7 +139,7 @@ const Index = () => {
       }
 
       if (payload.isTyping) {
-        const conversation = activeConversation();
+        const conversation = useChatStore.getState().activeConversation();
         setTypingUser(conversation?.user.name || "User");
         return;
       }
@@ -148,11 +148,12 @@ const Index = () => {
     };
 
     const handleNewMessage = (newMsg: ApiMessage) => {
-      if (newMsg.conversationId === activeConversationId) {
-        addMessage(toUIMessage(newMsg));
+      const currentActiveId = useChatStore.getState().activeConversationId;
+      if (newMsg.conversationId === currentActiveId) {
+        useChatStore.getState().addMessage(toUIMessage(newMsg));
       }
 
-      updateConversationLastMessage(newMsg.conversationId, newMsg);
+      useChatStore.getState().updateConversationLastMessage(newMsg.conversationId, newMsg);
     };
 
     socketService.connect(accessToken);
@@ -179,10 +180,6 @@ const Index = () => {
   }, [
     accessToken,
     user?.id,
-    activeConversationId,
-    activeConversation,
-    addMessage,
-    updateConversationLastMessage,
     setUserOnlineStatus,
   ]);
 
@@ -246,19 +243,8 @@ const Index = () => {
   return (
     <div className="h-screen w-full overflow-hidden noise-bg" style={{ background: "var(--nx-surface-0)" }}>
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel
-          defaultSize={5}
-          minSize={4}
-          maxSize={6}
-          className="min-w-16"
-        >
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
           <AppSidebar currentUser={user} />
-        </ResizablePanel>
-
-        <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
-
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-          <ConversationList />
         </ResizablePanel>
 
         <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
