@@ -20,6 +20,7 @@ export class MessagesService {
     const newMessage = new this.messageModel({
       ...createMessageDto,
       senderId,
+      readBy: [senderId],
     });
 
     const savedMessage = await newMessage.save();
@@ -97,5 +98,32 @@ export class MessagesService {
     }
 
     return { message: 'Đã xóa tin nhắn thành công', messageId };
+  }
+
+  async markConversationAsRead(conversationId: string, userId: string) {
+    const unreadMessages = await this.messageModel
+      .find(
+        {
+          conversationId,
+          senderId: { $ne: userId },
+          readBy: { $nin: [userId] },
+        },
+        { _id: 1 },
+      )
+      .lean()
+      .exec();
+
+    const messageIds = unreadMessages.map((m) => m._id.toString());
+
+    if (messageIds.length === 0) {
+      return { messageIds: [] };
+    }
+
+    await this.messageModel.updateMany(
+      { _id: { $in: messageIds } },
+      { $addToSet: { readBy: userId } },
+    );
+
+    return { messageIds };
   }
 }

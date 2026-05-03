@@ -6,7 +6,7 @@ class SocketService {
   private socket: Socket | null = null;
 
   connect(token?: string) {
-    if (this.socket?.connected) return;
+    if (this.socket) return;
 
     this.socket = io(SOCKET_URL, {
       transports: ["websocket"],
@@ -23,7 +23,7 @@ class SocketService {
   }
 
   emit(event: string, payload?: any) {
-    if (!this.socket?.connected) return;
+    if (!this.socket) return;
     this.socket.emit(event, payload);
   }
 

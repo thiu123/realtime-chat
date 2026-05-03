@@ -43,6 +43,7 @@ const Index = () => {
     setUsers,
     setLoading,
     setUserOnlineStatus,
+    users,
   } = useChatStore();
 
   useEffect(() => {
@@ -92,6 +93,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!activeConversationId) return;
+    if (!user?.id) return;
 
     setTypingUser(undefined);
 
@@ -103,18 +105,26 @@ const Index = () => {
       try {
         const messagesData = await getMessages(activeConversationId);
         setMessages(messagesData.map(toUIMessage));
+        socketService.emit("markAsRead", {
+          conversationId: activeConversationId,
+          userId: user.id,
+        });
       } catch (error) {
         console.error("Error:", error);
       }
     };
 
     loadMessages();
-  }, [activeConversationId, setMessages]);
+  }, [activeConversationId, setMessages, user?.id]);
 
   useEffect(() => {
     if (!accessToken || !user?.id) return;
+    const currentUserId = user.id;
 
-    const handlePresenceUpdate = (payload: { userId: string; online: boolean }) => {
+    const handlePresenceUpdate = (payload: {
+      userId: string;
+      online: boolean;
+    }) => {
       setUserOnlineStatus(payload.userId, payload.online);
     };
 
@@ -134,7 +144,7 @@ const Index = () => {
         return;
       }
 
-      if (payload.userId === user?.id) {
+      if (payload.userId === currentUserId) {
         return;
       }
 
@@ -151,9 +161,38 @@ const Index = () => {
       const currentActiveId = useChatStore.getState().activeConversationId;
       if (newMsg.conversationId === currentActiveId) {
         useChatStore.getState().addMessage(toUIMessage(newMsg));
+
+        const senderId =
+          typeof newMsg.senderId === "object"
+            ? newMsg.senderId._id
+            : newMsg.senderId;
+
+        if (senderId !== currentUserId) {
+          socketService.emit("markAsRead", {
+            conversationId: currentActiveId,
+            userId: currentUserId,
+          });
+        }
       }
 
-      useChatStore.getState().updateConversationLastMessage(newMsg.conversationId, newMsg);
+      useChatStore
+        .getState()
+        .updateConversationLastMessage(newMsg.conversationId, newMsg);
+    };
+
+    const handleMessagesRead = (payload: {
+      conversationId: string;
+      userId: string;
+      messageIds: string[];
+    }) => {
+      const currentActiveId = useChatStore.getState().activeConversationId;
+      if (payload.conversationId !== currentActiveId) {
+        return;
+      }
+
+      useChatStore
+        .getState()
+        .markMessagesRead(payload.messageIds, payload.userId);
     };
 
     socketService.connect(accessToken);
@@ -161,9 +200,10 @@ const Index = () => {
     socketService.on("presence:list", handlePresenceList);
     socketService.on("userTyping", handleUserTyping);
     socketService.on("newMessage", handleNewMessage);
+    socketService.on("messagesRead", handleMessagesRead);
 
     const announceOnline = () => {
-      socketService.emit("presence:online", { userId: user.id });
+      socketService.emit("presence:online", { userId: currentUserId });
     };
 
     socketService.on("connect", announceOnline);
@@ -175,13 +215,16 @@ const Index = () => {
       socketService.off("presence:list");
       socketService.off("userTyping");
       socketService.off("newMessage");
+      socketService.off("messagesRead");
       socketService.disconnect();
     };
-  }, [
-    accessToken,
-    user?.id,
-    setUserOnlineStatus,
-  ]);
+  }, [accessToken, user?.id, setUserOnlineStatus]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (users.length === 0) return;
+    socketService.emit("presence:online", { userId: user.id });
+  }, [user?.id, users.length]);
 
   const handleSendMessage = useCallback(
     (content: string, type?: string, imageUrl?: string) => {
@@ -198,18 +241,18 @@ const Index = () => {
     [user, activeConversationId],
   );
 
-    const handleTypingChange = useCallback(
-      (isTyping: boolean) => {
-        if (!user || !activeConversationId) return;
+  const handleTypingChange = useCallback(
+    (isTyping: boolean) => {
+      if (!user || !activeConversationId) return;
 
-        socketService.emit("typing", {
-          conversationId: activeConversationId,
-          userId: user.id,
-          isTyping,
-        });
-      },
-      [user, activeConversationId],
-    );
+      socketService.emit("typing", {
+        conversationId: activeConversationId,
+        userId: user.id,
+        isTyping,
+      });
+    },
+    [user, activeConversationId],
+  );
 
   if (!user) return null;
 
@@ -220,17 +263,36 @@ const Index = () => {
         style={{ background: "var(--nx-surface-0)" }}
       >
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center accent-gradient animate-glow-pulse"
-          >
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center accent-gradient animate-glow-pulse">
             <MessageSquare className="w-7 h-7 text-white" />
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "0ms" }} />
-            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "150ms" }} />
-            <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "var(--nx-accent-400)", animationDelay: "300ms" }} />
+            <div
+              className="w-1.5 h-1.5 rounded-full animate-bounce"
+              style={{
+                background: "var(--nx-accent-400)",
+                animationDelay: "0ms",
+              }}
+            />
+            <div
+              className="w-1.5 h-1.5 rounded-full animate-bounce"
+              style={{
+                background: "var(--nx-accent-400)",
+                animationDelay: "150ms",
+              }}
+            />
+            <div
+              className="w-1.5 h-1.5 rounded-full animate-bounce"
+              style={{
+                background: "var(--nx-accent-400)",
+                animationDelay: "300ms",
+              }}
+            />
           </div>
-          <p className="text-sm font-medium" style={{ color: "var(--nx-text-tertiary)" }}>
+          <p
+            className="text-sm font-medium"
+            style={{ color: "var(--nx-text-tertiary)" }}
+          >
             Loading your conversations...
           </p>
         </div>
@@ -241,13 +303,19 @@ const Index = () => {
   const currentConversation = activeConversation();
 
   return (
-    <div className="h-screen w-full overflow-hidden noise-bg" style={{ background: "var(--nx-surface-0)" }}>
+    <div
+      className="h-screen w-full overflow-hidden noise-bg"
+      style={{ background: "var(--nx-surface-0)" }}
+    >
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
           <AppSidebar currentUser={user} />
         </ResizablePanel>
 
-        <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
+        <ResizableHandle
+          className="w-px"
+          style={{ background: "var(--nx-glass-border)" }}
+        />
 
         <ResizablePanel defaultSize={50} minSize={30}>
           <ChatPanel
@@ -260,7 +328,10 @@ const Index = () => {
 
         {currentConversation && (
           <>
-            <ResizableHandle className="w-px" style={{ background: "var(--nx-glass-border)" }} />
+            <ResizableHandle
+              className="w-px"
+              style={{ background: "var(--nx-glass-border)" }}
+            />
             <ResizablePanel
               defaultSize={25}
               minSize={20}

@@ -33,6 +33,13 @@ export class Message {
   // Lưu ảnh dạng base64 string (cho tin nhắn hình ảnh)
   @Prop({ type: String, required: false })
   imageUrl: string;
+
+  @Prop({
+    type: [{ type: Types.ObjectId, ref: 'User' }],
+    default: [],
+    index: true,
+  })
+  readBy: Types.ObjectId[];
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

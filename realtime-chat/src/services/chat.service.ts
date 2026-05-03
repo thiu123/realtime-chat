@@ -15,6 +15,7 @@ export interface ApiMessage {
   content: string;
   type: string;        // 'text' | 'emoji' | 'image'
   imageUrl?: string;   // Ảnh base64 (có khi type = 'image')
+  readBy?: string[];
   createdAt: string;
   updatedAt: string;
 }

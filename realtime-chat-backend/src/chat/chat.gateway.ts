@@ -251,4 +251,44 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       isTyping: payload.isTyping,
     });
   }
+
+  /**
+   * Read receipts
+   * Client gửi: { conversationId: string, userId: string }
+   */
+  @SubscribeMessage('markAsRead')
+  async handleMarkAsRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    payload: {
+      conversationId: string;
+      userId: string;
+    },
+  ) {
+    try {
+      const { conversationId, userId } = payload;
+
+      if (!conversationId || !userId) {
+        return { status: 'error', message: 'conversationId and userId are required' };
+      }
+
+      const { messageIds } = await this.messagesService.markConversationAsRead(
+        conversationId,
+        userId,
+      );
+
+      if (messageIds.length > 0) {
+        this.server.to(conversationId).emit('messagesRead', {
+          conversationId,
+          userId,
+          messageIds,
+        });
+      }
+
+      return { status: 'ok', messageIds };
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      return { status: 'error', message: this.getErrorMessage(error) };
+    }
+  }
 }

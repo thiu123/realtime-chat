@@ -31,6 +31,7 @@ export interface Message {
   linkPreview?: LinkPreview;
   reactions?: Reaction[];
   read?: boolean;
+  readBy?: string[];
 }
 
 export interface Conversation {
