@@ -269,7 +269,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const { conversationId, userId } = payload;
 
       if (!conversationId || !userId) {
-        return { status: 'error', message: 'conversationId and userId are required' };
+        return {
+          status: 'error',
+          message: 'conversationId and userId are required',
+        };
       }
 
       const { messageIds } = await this.messagesService.markConversationAsRead(

@@ -15,11 +15,11 @@ export class UsersService {
   }
 
   async findAll() {
-    return this.userModel.find().exec();
+    return this.userModel.find().select('-password').exec();
   }
 
   async findOne(id: string) {
-    return this.userModel.findById(id).exec();
+    return this.userModel.findById(id).select('-password').exec();
   }
 
   async findByEmail(email: string) {
@@ -29,6 +29,7 @@ export class UsersService {
   async update(id: string, updateUserDto: UpdateUserDto) {
     return this.userModel
       .findByIdAndUpdate(id, updateUserDto, { new: true })
+      .select('-password')
       .exec();
   }
 
