@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { getAccessToken, removeAccessToken } from './auth';
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -9,14 +8,25 @@ export const api = axios.create({
   },
 });
 
+// Đọc token từ auth-store (Zustand persist) — nguồn duy nhất
+function getTokenFromStore(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('auth-store');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
 api.interceptors.request.use(
   (config) => {
-    const token = getAccessToken();
-
+    const token = getTokenFromStore();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
     return config;
   },
   (error) => Promise.reject(error),
@@ -28,8 +38,6 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401) {
-      removeAccessToken();
-
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }

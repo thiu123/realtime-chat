@@ -1,18 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-const ACCESS_TOKEN_KEY = "access_token";
-
-const setAccessTokenStorage = (token: string) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(ACCESS_TOKEN_KEY, token);
-};
-
-const clearAccessTokenStorage = () => {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-};
-
 export interface AuthUser {
   id: string;
   name: string;
@@ -42,20 +30,13 @@ export const useAuthStore = create<AuthStore>()(
       accessToken: null,
       _hasHydrated: false,
 
+      // Nguồn duy nhất: Zustand persist (auth-store trong localStorage)
       setAuth: (user, token) => {
-        setAccessTokenStorage(token);
-        set({
-          user,
-          accessToken: token,
-        });
+        set({ user, accessToken: token });
       },
 
       clearAuth: () => {
-        clearAccessTokenStorage();
-        set({
-          user: null,
-          accessToken: null,
-        });
+        set({ user: null, accessToken: null });
       },
 
       // Cập nhật avatar trong store (để UI cập nhật ngay lập tức)
@@ -74,12 +55,6 @@ export const useAuthStore = create<AuthStore>()(
         accessToken: state.accessToken,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state?.accessToken) {
-          setAccessTokenStorage(state.accessToken);
-        } else {
-          clearAccessTokenStorage();
-        }
-
         state?.setHasHydrated(true);
       },
     }
