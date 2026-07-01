@@ -9,9 +9,11 @@ interface ChatPanelProps {
   isTyping?: boolean;
   typingUser?: string;
   onTypingChange?: (isTyping: boolean) => void;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
 }
 
-export function ChatPanel({ onSendMessage, isTyping, typingUser, onTypingChange }: ChatPanelProps) {
+export function ChatPanel({ onSendMessage, isTyping, typingUser, onTypingChange, onEditMessage, onDeleteMessage }: ChatPanelProps) {
   const activeConversation = useChatStore((state) =>
     state.activeConversation(),
   );
@@ -48,7 +50,7 @@ export function ChatPanel({ onSendMessage, isTyping, typingUser, onTypingChange 
   return (
     <div className="flex-1 flex flex-col h-full" style={{ background: "var(--nx-surface-0)" }}>
       <ChatHeader user={activeConversation.user} />
-      <MessageList />
+      <MessageList onEditMessage={onEditMessage} onDeleteMessage={onDeleteMessage} />
       <MessageInput
         onSend={onSendMessage}
         isTyping={isTyping}

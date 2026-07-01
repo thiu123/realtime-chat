@@ -25,6 +25,7 @@ export interface ApiConversation {
   participants: ApiUser[];
   lastMessage?: ApiMessage;
   lastMessageAt?: string;
+  unreadCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +45,13 @@ export const getConversations = async (
   userId: string
 ): Promise<ApiConversation[]> => {
   const response = await api.get(`/conversations?userId=${userId}`);
+  return response.data;
+};
+
+export const getConversation = async (
+  conversationId: string
+): Promise<ApiConversation> => {
+  const response = await api.get(`/conversations/${conversationId}`);
   return response.data;
 };
 

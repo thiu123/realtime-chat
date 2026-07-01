@@ -22,14 +22,39 @@ interface ChatState {
   updateConversationLastMessage: (
     conversationId: string,
     message: ApiMessage,
+    context?: {
+      activeConversationId?: string;
+      currentUserId?: string;
+    },
   ) => void;
   setUsers: (users: ApiUser[]) => void;
   setLoading: (loading: boolean) => void;
   addConversation: (conversation: Conversation) => void;
   setUserOnlineStatus: (userId: string, online: boolean) => void;
   markMessagesRead: (messageIds: string[], readerId: string) => void;
+  markConversationRead: (conversationId: string) => void;
+  updateMessageContent: (messageId: string, content: string) => void;
+  removeMessage: (messageId: string) => void;
   reset: () => void;
 }
+
+const getMessageSenderId = (message: ApiMessage) => {
+  return typeof message.senderId === "object"
+    ? message.senderId._id
+    : message.senderId;
+};
+
+const getConversationPreview = (message?: ApiMessage) => {
+  if (!message) {
+    return "No messages yet";
+  }
+
+  if (message.type === "image" && !message.content) {
+    return "Photo";
+  }
+
+  return message.content || "New message";
+};
 
 export const toUIConversation = (
   conv: ApiConversation,
@@ -44,13 +69,14 @@ export const toUIConversation = (
       avatar: otherUser?.avatar || "",
       online: false,
     },
-    lastMessage: conv.lastMessage?.content || "No messages yet",
+    lastMessage: getConversationPreview(conv.lastMessage),
     timestamp: conv.lastMessageAt
       ? new Date(conv.lastMessageAt).toLocaleTimeString([], {
           hour: "numeric",
           minute: "2-digit",
         })
       : "",
+    unreadCount: conv.unreadCount ?? 0,
   };
 };
 
@@ -99,7 +125,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       })),
     })),
 
-  setActiveConversationId: (id) => set({ activeConversationId: id }),
+  setActiveConversationId: (id) =>
+    set((state) => ({
+      activeConversationId: id,
+      conversations: state.conversations.map((conv) =>
+        conv.id === id ? { ...conv, unreadCount: 0 } : conv,
+      ),
+    })),
 
   setMessages: (messages) => set({ messages }),
 
@@ -111,21 +143,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { messages: [...state.messages, message] };
     }),
 
-  updateConversationLastMessage: (conversationId, message) =>
-    set((state) => ({
-      conversations: state.conversations.map((conv) =>
+  updateConversationLastMessage: (conversationId, message, context) =>
+    set((state) => {
+      const senderId = getMessageSenderId(message);
+      const shouldIncrementUnread =
+        Boolean(context?.currentUserId) &&
+        senderId !== context?.currentUserId &&
+        conversationId !== context?.activeConversationId;
+
+      const conversations = state.conversations.map((conv) =>
         conv.id === conversationId
           ? {
               ...conv,
-              lastMessage: message.content,
+              lastMessage: getConversationPreview(message),
               timestamp: new Date(message.createdAt).toLocaleTimeString([], {
                 hour: "numeric",
                 minute: "2-digit",
               }),
+              unreadCount: shouldIncrementUnread
+                ? (conv.unreadCount ?? 0) + 1
+                : (conv.unreadCount ?? 0),
             }
           : conv,
-      ),
-    })),
+      );
+
+      const updatedConversation = conversations.find(
+        (conv) => conv.id === conversationId,
+      );
+
+      if (!updatedConversation) {
+        return { conversations };
+      }
+
+      return {
+        conversations: [
+          updatedConversation,
+          ...conversations.filter((conv) => conv.id !== conversationId),
+        ],
+      };
+    }),
 
   setUsers: (users) =>
     set((state) => ({
@@ -204,6 +260,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
           read: nextReadBy.length > 1,
         };
       }),
+    })),
+
+  markConversationRead: (conversationId) =>
+    set((state) => ({
+      conversations: state.conversations.map((conv) =>
+        conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv,
+      ),
+    })),
+
+  updateMessageContent: (messageId, content) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, content } : m,
+      ),
+    })),
+
+  removeMessage: (messageId) =>
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== messageId),
     })),
 
   reset: () =>

@@ -1,17 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   Conversation,
   ConversationDocument,
 } from './schemas/conversation.schema';
 import { CreateConversationDto } from './dto/create-conversation.dto';
+import { Message, MessageDocument } from '../messages/schemas/message.schema';
 
 @Injectable()
 export class ConversationsService {
   constructor(
     @InjectModel(Conversation.name)
     private conversationModel: Model<ConversationDocument>,
+    @InjectModel(Message.name)
+    private messageModel: Model<MessageDocument>,
   ) {}
 
   /**
@@ -44,15 +47,53 @@ export class ConversationsService {
   /**
    * Tìm tất cả conversations của 1 user
    */
-  async findConversationsByUserId(userId: string): Promise<Conversation[]> {
-    return this.conversationModel
+  async findConversationsByUserId(userId: string) {
+    if (!Types.ObjectId.isValid(userId)) {
+      return [];
+    }
+
+    const userObjectId = new Types.ObjectId(userId);
+    const conversations = await this.conversationModel
       .find({
         participants: userId,
       })
       .populate('participants', 'name email avatar')
       .populate('lastMessage')
       .sort({ lastMessageAt: -1 })
+      .lean()
       .exec();
+
+    const conversationIds = conversations.map((conversation) =>
+      conversation._id,
+    );
+
+    const unreadCounts = await this.messageModel
+      .aggregate([
+        {
+          $match: {
+            conversationId: { $in: conversationIds },
+            senderId: { $ne: userObjectId },
+            readBy: { $nin: [userObjectId] },
+          },
+        },
+        {
+          $group: {
+            _id: '$conversationId',
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .exec();
+
+    const unreadCountByConversation = new Map(
+      unreadCounts.map((item) => [item._id.toString(), item.count]),
+    );
+
+    return conversations.map((conversation) => ({
+      ...conversation,
+      unreadCount:
+        unreadCountByConversation.get(conversation._id.toString()) ?? 0,
+    }));
   }
 
   /**

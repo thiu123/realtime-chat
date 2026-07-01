@@ -6,7 +6,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, isToday, isYesterday } from "date-fns";
 import { MessageSquare } from "lucide-react";
 
-export function MessageList() {
+interface MessageListProps {
+  onEditMessage?: (messageId: string, content: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+}
+
+export function MessageList({ onEditMessage, onDeleteMessage }: MessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messages = useChatStore((state) => state.messages);
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -90,7 +95,12 @@ export function MessageList() {
                     key={message.id}
                     className={`flex mb-4 ${isMe ? "justify-end" : "justify-start"}`}
                   >
-                    <MessageBubble message={message} isMe={isMe} />
+                    <MessageBubble
+                    message={message}
+                    isMe={isMe}
+                    onEdit={onEditMessage}
+                    onDelete={onDeleteMessage}
+                  />
                   </div>
                 );
               })}

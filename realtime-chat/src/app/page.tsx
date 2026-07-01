@@ -12,6 +12,7 @@ import {
 } from "@/stores/chat.store";
 import { socketService } from "@/services/socket.service";
 import {
+  getConversation,
   getConversations,
   getMessages,
   getUsers,
@@ -43,6 +44,7 @@ const Index = () => {
     setUsers,
     setLoading,
     setUserOnlineStatus,
+    markConversationRead,
     users,
   } = useChatStore();
 
@@ -105,6 +107,7 @@ const Index = () => {
       try {
         const messagesData = await getMessages(activeConversationId);
         setMessages(messagesData.map(toUIMessage));
+        markConversationRead(activeConversationId);
         socketService.emit("markAsRead", {
           conversationId: activeConversationId,
           userId: user.id,
@@ -115,7 +118,7 @@ const Index = () => {
     };
 
     loadMessages();
-  }, [activeConversationId, setMessages, user?.id]);
+  }, [activeConversationId, markConversationRead, setMessages, user?.id]);
 
   useEffect(() => {
     if (!accessToken || !user?.id) return;
@@ -157,17 +160,39 @@ const Index = () => {
       setTypingUser(undefined);
     };
 
-    const handleNewMessage = (newMsg: ApiMessage) => {
+    const ensureConversationExists = async (conversationId: string) => {
+      const conversationExists = useChatStore
+        .getState()
+        .conversations.some((conversation) => conversation.id === conversationId);
+
+      if (conversationExists) {
+        return;
+      }
+
+      const conversation = await getConversation(conversationId);
+      useChatStore
+        .getState()
+        .addConversation(toUIConversation(conversation, currentUserId));
+    };
+
+    const handleNewMessage = async (newMsg: ApiMessage) => {
+      try {
+        await ensureConversationExists(newMsg.conversationId);
+      } catch (error) {
+        console.error("Error loading conversation:", error);
+      }
+
       const currentActiveId = useChatStore.getState().activeConversationId;
+      const senderId =
+        typeof newMsg.senderId === "object"
+          ? newMsg.senderId._id
+          : newMsg.senderId;
+
       if (newMsg.conversationId === currentActiveId) {
         useChatStore.getState().addMessage(toUIMessage(newMsg));
 
-        const senderId =
-          typeof newMsg.senderId === "object"
-            ? newMsg.senderId._id
-            : newMsg.senderId;
-
         if (senderId !== currentUserId) {
+          useChatStore.getState().markConversationRead(currentActiveId);
           socketService.emit("markAsRead", {
             conversationId: currentActiveId,
             userId: currentUserId,
@@ -177,7 +202,10 @@ const Index = () => {
 
       useChatStore
         .getState()
-        .updateConversationLastMessage(newMsg.conversationId, newMsg);
+        .updateConversationLastMessage(newMsg.conversationId, newMsg, {
+          activeConversationId: currentActiveId,
+          currentUserId,
+        });
     };
 
     const handleMessagesRead = (payload: {
@@ -193,6 +221,20 @@ const Index = () => {
       useChatStore
         .getState()
         .markMessagesRead(payload.messageIds, payload.userId);
+
+      if (payload.userId === currentUserId) {
+        useChatStore.getState().markConversationRead(payload.conversationId);
+      }
+    };
+
+    const handleMessageUpdated = (updatedMsg: ApiMessage) => {
+      const currentActiveId = useChatStore.getState().activeConversationId;
+      if (updatedMsg.conversationId !== currentActiveId) return;
+      useChatStore.getState().updateMessageContent(updatedMsg._id, updatedMsg.content);
+    };
+
+    const handleMessageDeleted = (payload: { messageId: string }) => {
+      useChatStore.getState().removeMessage(payload.messageId);
     };
 
     socketService.connect(accessToken);
@@ -201,6 +243,8 @@ const Index = () => {
     socketService.on("userTyping", handleUserTyping);
     socketService.on("newMessage", handleNewMessage);
     socketService.on("messagesRead", handleMessagesRead);
+    socketService.on("messageUpdated", handleMessageUpdated);
+    socketService.on("messageDeleted", handleMessageDeleted);
 
     const announceOnline = () => {
       socketService.emit("presence:online", { userId: currentUserId });
@@ -216,6 +260,8 @@ const Index = () => {
       socketService.off("userTyping");
       socketService.off("newMessage");
       socketService.off("messagesRead");
+      socketService.off("messageUpdated");
+      socketService.off("messageDeleted");
       socketService.disconnect();
     };
   }, [accessToken, user?.id, setUserOnlineStatus]);
@@ -252,6 +298,33 @@ const Index = () => {
       });
     },
     [user, activeConversationId],
+  );
+
+  const handleEditMessage = useCallback(
+    (messageId: string, content: string) => {
+      if (!user) return;
+      const conversationId = useChatStore.getState().activeConversationId;
+      socketService.emit("updateMessage", {
+        messageId,
+        senderId: user.id,
+        content,
+        conversationId,
+      });
+    },
+    [user],
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (!user) return;
+      const conversationId = useChatStore.getState().activeConversationId;
+      socketService.emit("deleteMessage", {
+        messageId,
+        senderId: user.id,
+        conversationId,
+      });
+    },
+    [user],
   );
 
   if (!user) return null;
@@ -323,6 +396,8 @@ const Index = () => {
             isTyping={Boolean(typingUser)}
             typingUser={typingUser}
             onTypingChange={handleTypingChange}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
           />
         </ResizablePanel>
 

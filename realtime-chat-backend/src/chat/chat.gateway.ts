@@ -32,6 +32,49 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return error instanceof Error ? error.message : 'Unknown error';
   }
 
+  private getUserRoom(userId: string) {
+    return `user:${userId}`;
+  }
+
+  private getParticipantId(participant: unknown) {
+    if (
+      participant &&
+      typeof participant === 'object' &&
+      '_id' in participant
+    ) {
+      return String((participant as { _id: unknown })._id);
+    }
+
+    return String(participant);
+  }
+
+  private async emitToConversationUsers(
+    conversationId: string,
+    event: string,
+    payload: unknown,
+  ) {
+    const conversation = await this.conversationsService.findById(
+      conversationId,
+    );
+
+    const rooms =
+      conversation?.participants.map((participant) =>
+        this.getUserRoom(this.getParticipantId(participant)),
+      ) ?? [];
+
+    if (rooms.length === 0) {
+      this.server.to(conversationId).emit(event, payload);
+      return;
+    }
+
+    let target = this.server.to(rooms[0]);
+    rooms.slice(1).forEach((room) => {
+      target = target.to(room);
+    });
+
+    target.emit(event, payload);
+  }
+
   handleConnection(client: Socket) {
     console.log(`✅ Client connected: ${client.id}`);
   }
@@ -83,6 +126,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const existingSockets = this.userToSockets.get(userId) ?? new Set<string>();
     existingSockets.add(client.id);
     this.userToSockets.set(userId, existingSockets);
+
+    void client.join(this.getUserRoom(userId));
 
     this.server.emit('presence:update', {
       userId,
@@ -148,7 +193,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       // 3. Gửi tin nhắn đến tất cả người trong room (bao gồm cả người gửi)
-      this.server.to(payload.conversationId).emit('newMessage', newMessage);
+      await this.emitToConversationUsers(
+        payload.conversationId,
+        'newMessage',
+        newMessage,
+      );
 
       // 4. Trả về cho người gửi
       return { status: 'sent', message: newMessage };

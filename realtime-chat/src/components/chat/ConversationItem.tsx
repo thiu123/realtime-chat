@@ -15,6 +15,7 @@ export function ConversationItem({
   onClick,
 }: ConversationItemProps) {
   const { user, lastMessage, timestamp, unreadCount } = conversation;
+  const hasUnread = (unreadCount ?? 0) > 0;
 
   return (
     <div
@@ -59,15 +60,15 @@ export function ConversationItem({
           <p
             className="text-sm truncate"
             style={{
-              color: unreadCount && unreadCount > 0
+              color: hasUnread
                 ? "var(--nx-text-primary)"
                 : "var(--nx-text-tertiary)",
-              fontWeight: unreadCount && unreadCount > 0 ? 500 : 400,
+              fontWeight: hasUnread ? 500 : 400,
             }}
           >
             {lastMessage}
           </p>
-          {unreadCount && unreadCount > 0 && (
+          {hasUnread && (
             <Badge
               className="text-white text-xs px-2 py-0.5 rounded-full ml-2 border-0"
               style={{
