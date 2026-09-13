@@ -1,7 +1,8 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 
+/** Body của PATCH /api/messages/:id */
 export class UpdateMessageDto {
   @IsString()
-  @IsOptional()
-  content?: string;
+  @IsNotEmpty({ message: 'Nội dung tin nhắn không được để trống' })
+  content: string;
 }

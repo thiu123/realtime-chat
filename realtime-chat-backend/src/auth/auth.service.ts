@@ -1,66 +1,77 @@
 import {
+  ConflictException,
   Injectable,
   UnauthorizedException,
-  ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
-import { CreateUserDto } from '../users/dto/create-user.dto';
 import * as bcrypt from 'bcryptjs';
+
+import { CreateUserDto } from '../users/dto/create-user.dto';
+import { UserDocument } from '../users/schemas/users.schema';
+import { UsersService } from '../users/users.service';
+import { JwtPayload } from './jwt-payload.interface';
+import { LoginDto } from './dto/login.dto';
+
+/** Số vòng băm của bcrypt: càng lớn càng chậm và càng khó bị dò mật khẩu. */
+const SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
   ) {}
 
+  /** Đăng ký tài khoản mới rồi đăng nhập luôn (trả về token). */
   async signup(createUserDto: CreateUserDto) {
     const existingUser = await this.usersService.findByEmail(
       createUserDto.email,
     );
     if (existingUser) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException('Email đã được sử dụng');
     }
-
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
     const user = await this.usersService.create({
-      ...createUserDto,
-      name: createUserDto.name || createUserDto.email.split('@')[0],
-      password: hashedPassword,
+      email: createUserDto.email,
+      // Không nhập tên thì lấy tạm phần trước dấu @ của email.
+      name: createUserDto.name?.trim() || createUserDto.email.split('@')[0],
+      // Luôn hash mật khẩu trước khi lưu vào database.
+      password: await bcrypt.hash(createUserDto.password, SALT_ROUNDS),
     });
 
-    const payload = { email: user.email, sub: user._id };
-    const access_token = this.jwtService.sign(payload);
-
-    return {
-      access_token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-      },
-    };
+    return this.buildAuthResponse(user);
   }
 
-  async login(email: string, password: string) {
+  /** Đăng nhập bằng email + mật khẩu. */
+  async login({ email, password }: LoginDto) {
     const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+
+    // Sai email hay sai mật khẩu đều trả về cùng một thông báo,
+    // để người lạ không dò được email nào đã tồn tại trong hệ thống.
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    return this.buildAuthResponse(user);
+  }
 
-    const payload = { email: user.email, sub: user._id };
-    const access_token = this.jwtService.sign(payload);
+  /** JwtStrategy gọi hàm này để lấy thông tin user từ id nằm trong token. */
+  validateUser(userId: string) {
+    return this.usersService.findById(userId);
+  }
+
+  /**
+   * Ký token và chuẩn hoá dữ liệu trả về cho client.
+   * Tách riêng vì cả signup và login đều cần kết quả giống hệt nhau.
+   */
+  private buildAuthResponse(user: UserDocument) {
+    const payload: JwtPayload = {
+      sub: user._id.toString(),
+      email: user.email,
+    };
 
     return {
-      access_token,
+      access_token: this.jwtService.sign(payload),
       user: {
         id: user._id,
         email: user.email,
@@ -68,17 +79,5 @@ export class AuthService {
         avatar: user.avatar,
       },
     };
-  }
-
-  async validateUser(userId: string) {
-    return this.usersService.findOne(userId);
-  }
-
-  verifyToken(token: string) {
-    try {
-      return this.jwtService.verify(token);
-    } catch (e) {
-      return null;
-    }
   }
 }

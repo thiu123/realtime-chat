@@ -1,12 +1,13 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Param,
-  Query,
+  Controller,
   Delete,
+  Get,
+  Param,
+  Post,
+  Query,
 } from '@nestjs/common';
+
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 
@@ -14,58 +15,33 @@ import { CreateConversationDto } from './dto/create-conversation.dto';
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
-  /**
-   * 📖 GET /conversations?userId=xxx
-   * Lấy tất cả conversations của 1 user
-   */
+  /** GET /api/conversations?userId=... - danh sách chat của một người. */
   @Get()
-  async getUserConversations(@Query('userId') userId: string) {
-    return await this.conversationsService.findConversationsByUserId(userId);
+  findAllOfUser(@Query('userId') userId: string) {
+    return this.conversationsService.findAllByUserId(userId);
   }
 
   /**
-   * 💬 POST /conversations
-   * Tạo conversation mới hoặc lấy conversation đã tồn tại giữa 2 users
-   * Body: { userId: string, participantId: string }
+   * POST /api/conversations - body: { userId, participantId }
+   * Trả về cuộc trò chuyện đã có, hoặc tạo mới nếu 2 người chưa từng nhắn tin.
    */
   @Post()
-  async createConversation(
-    @Body('userId') userId: string,
-    @Body('participantId') participantId: string,
-  ) {
-    // Kiểm tra xem conversation đã tồn tại chưa
-    const existing =
-      await this.conversationsService.findConversationBetweenUsers(
-        userId,
-        participantId,
-      );
-
-    if (existing) {
-      return existing;
-    }
-
-    // Tạo mới
-    return await this.conversationsService.createConversation(userId, {
-      participantId,
-    });
+  create(@Body() createConversationDto: CreateConversationDto) {
+    return this.conversationsService.createOrGet(
+      createConversationDto.userId,
+      createConversationDto.participantId,
+    );
   }
 
-  /**
-   * 🔍 GET /conversations/:id
-   * Lấy conversation detail
-   */
+  /** GET /api/conversations/:id */
   @Get(':id')
-  async getConversation(@Param('id') id: string) {
-    return await this.conversationsService.findById(id);
+  findOne(@Param('id') id: string) {
+    return this.conversationsService.findOne(id);
   }
 
-  /**
-   * 🗑️ DELETE /conversations/:id
-   * Xóa conversation
-   */
+  /** DELETE /api/conversations/:id */
   @Delete(':id')
-  async deleteConversation(@Param('id') id: string) {
-    await this.conversationsService.deleteConversation(id);
-    return { message: 'Conversation deleted successfully' };
+  remove(@Param('id') id: string) {
+    return this.conversationsService.remove(id);
   }
 }

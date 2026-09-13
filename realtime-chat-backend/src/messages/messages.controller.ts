@@ -1,66 +1,71 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
-  Delete,
-  Body,
-  Request,
   UseGuards,
 } from '@nestjs/common';
+
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { UserDocument } from '../users/schemas/users.schema';
+import { UpdateMessageDto } from './dto/update-message.dto';
 import { MessagesService } from './messages.service';
 
+/**
+ * Các route REST cho tin nhắn.
+ *
+ * Trong ứng dụng chat, việc GỬI tin nhắn đi qua WebSocket (xem ChatGateway)
+ * để mọi người nhận được ngay lập tức. REST ở đây dùng để tải lịch sử tin nhắn
+ * và để sửa/xoá khi không cần realtime.
+ */
 @Controller('messages')
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
   /**
-   * 📖 READ - Lấy tất cả tin nhắn của 1 cuộc trò chuyện
-   * GET /messages/conversation/:conversationId
+   * GET /api/messages/conversation/:conversationId
+   *
+   * Route này phải khai báo TRƯỚC @Get(':id'), nếu không NestJS sẽ hiểu
+   * "conversation" chính là giá trị của :id.
    */
   @Get('conversation/:conversationId')
-  async getMessages(@Param('conversationId') conversationId: string) {
-    return await this.messagesService.findByConversation(conversationId);
+  findByConversation(@Param('conversationId') conversationId: string) {
+    return this.messagesService.findByConversation(conversationId);
   }
 
-  /**
-   * 🔍 READ - Lấy 1 tin nhắn cụ thể
-   * GET /messages/:id
-   */
+  /** GET /api/messages/:id */
   @Get(':id')
-  async getMessage(@Param('id') id: string) {
-    return await this.messagesService.findOne(id);
+  findOne(@Param('id') id: string) {
+    return this.messagesService.findOne(id);
   }
 
   /**
-   * ✏️ UPDATE - Sửa tin nhắn
-   * PATCH /messages/:id
-   * Body: { content: string }
+   * PATCH /api/messages/:id - body: { content }
    *
-   * Lưu ý: Trong thực tế cần thêm @UseGuards(JwtAuthGuard)
-   * để lấy userId từ token, ở đây demo đơn giản
+   * Có JwtAuthGuard nên id người sửa được lấy từ token, không lấy từ body:
+   * nếu tin người dùng tự khai senderId thì ai cũng sửa được tin của người khác.
    */
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  async updateMessage(
+  update(
     @Param('id') id: string,
-    @Body('content') content: string,
-    @Body('senderId') senderId: string, // Thực tế lấy từ JWT token
+    @Body() updateMessageDto: UpdateMessageDto,
+    @CurrentUser() user: UserDocument,
   ) {
-    return await this.messagesService.update(id, senderId, content);
+    return this.messagesService.update(
+      id,
+      user._id.toString(),
+      updateMessageDto.content,
+    );
   }
 
-  /**
-   * 🗑️ DELETE - Xóa tin nhắn
-   * DELETE /messages/:id
-   * Body: { senderId: string }
-   *
-   * Lưu ý: Trong thực tế cần thêm @UseGuards(JwtAuthGuard)
-   */
+  /** DELETE /api/messages/:id */
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  async deleteMessage(
-    @Param('id') id: string,
-    @Body('senderId') senderId: string, // Thực tế lấy từ JWT token
-  ) {
-    return await this.messagesService.delete(id, senderId);
+  remove(@Param('id') id: string, @CurrentUser() user: UserDocument) {
+    return this.messagesService.remove(id, user._id.toString());
   }
 }

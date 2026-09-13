@@ -1,379 +1,45 @@
 "use client";
-import { useEffect, useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { AppSidebar } from "@/components/chat/AppSidebar";
+import { ChatLoadingScreen } from "@/components/chat/ChatLoadingScreen";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { UserDetailPanel } from "@/components/chat/UserDetailPanel";
-import { useAuthStore } from "@/stores/auth.store";
 import {
-  useChatStore,
-  toUIConversation,
-  toUIMessage,
-} from "@/stores/chat.store";
-import { socketService } from "@/services/socket.service";
-import {
-  getConversation,
-  getConversations,
-  getMessages,
-  getUsers,
-  ApiMessage,
-} from "@/services/chat.service";
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
   ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { MessageSquare } from "lucide-react";
+import { useChatActions } from "@/hooks/useChatActions";
+import { useChatData } from "@/hooks/useChatData";
+import { useChatSocket } from "@/hooks/useChatSocket";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useChatStore } from "@/stores/chat.store";
 
-const Index = () => {
-  const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const hasHydrated = useAuthStore((state) => state._hasHydrated);
-  const [typingUser, setTypingUser] = useState<string | undefined>();
+/**
+ * Màn hình chat chính: chia 3 cột (danh sách chat | khung chat | thông tin người kia).
+ *
+ * Toàn bộ phần "chạy ngầm" được tách ra hook để file này chỉ còn phần bố cục:
+ * - useRequireAuth : chưa đăng nhập thì đá về /login
+ * - useChatSocket  : kết nối realtime, đổ sự kiện vào store
+ * - useChatData    : gọi REST API nạp dữ liệu vào store
+ * - useChatActions : các hành động gửi lên server (gửi/sửa/xoá tin, đang gõ)
+ */
+export default function ChatPage() {
+  const { user } = useRequireAuth();
 
-  const {
-    activeConversationId,
-    loading,
-    activeConversation,
-    setConversations,
-    setActiveConversationId,
-    setMessages,
-    addMessage,
-    updateConversationLastMessage,
-    setUsers,
-    setLoading,
-    setUserOnlineStatus,
-    markConversationRead,
-    users,
-  } = useChatStore();
+  // Gọi useChatSocket trước useChatData để socket sẵn sàng khi cần emit.
+  const { typingUser } = useChatSocket();
+  useChatData();
+  const { sendMessage, editMessage, deleteMessage, setTyping } =
+    useChatActions();
 
-  useEffect(() => {
-    if (!hasHydrated) {
-      return;
-    }
-
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [usersData, conversationsData] = await Promise.all([
-          getUsers(),
-          getConversations(user.id),
-        ]);
-
-        setUsers(usersData.filter((u) => u._id !== user.id));
-        const formattedConvs = conversationsData.map((c) =>
-          toUIConversation(c, user.id),
-        );
-        setConversations(formattedConvs);
-
-        if (formattedConvs.length > 0) {
-          setActiveConversationId(formattedConvs[0].id);
-        }
-      } catch (error) {
-        console.error("Error:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [
-    hasHydrated,
-    user,
-    router,
-    setLoading,
-    setUsers,
-    setConversations,
-    setActiveConversationId,
-  ]);
-
-  useEffect(() => {
-    if (!activeConversationId) return;
-    if (!user?.id) return;
-
-    setTypingUser(undefined);
-
-    socketService.emit("joinConversation", {
-      conversationId: activeConversationId,
-    });
-
-    const loadMessages = async () => {
-      try {
-        const messagesData = await getMessages(activeConversationId);
-        setMessages(messagesData.map(toUIMessage));
-        markConversationRead(activeConversationId);
-        socketService.emit("markAsRead", {
-          conversationId: activeConversationId,
-          userId: user.id,
-        });
-      } catch (error) {
-        console.error("Error:", error);
-      }
-    };
-
-    loadMessages();
-  }, [activeConversationId, markConversationRead, setMessages, user?.id]);
-
-  useEffect(() => {
-    if (!accessToken || !user?.id) return;
-    const currentUserId = user.id;
-
-    const handlePresenceUpdate = (payload: {
-      userId: string;
-      online: boolean;
-    }) => {
-      setUserOnlineStatus(payload.userId, payload.online);
-    };
-
-    const handlePresenceList = (payload: { onlineUserIds: string[] }) => {
-      payload.onlineUserIds.forEach((onlineUserId) => {
-        setUserOnlineStatus(onlineUserId, true);
-      });
-    };
-
-    const handleUserTyping = (payload: {
-      conversationId: string;
-      userId: string;
-      isTyping: boolean;
-    }) => {
-      const currentActiveId = useChatStore.getState().activeConversationId;
-      if (payload.conversationId !== currentActiveId) {
-        return;
-      }
-
-      if (payload.userId === currentUserId) {
-        return;
-      }
-
-      if (payload.isTyping) {
-        const conversation = useChatStore.getState().activeConversation();
-        setTypingUser(conversation?.user.name || "User");
-        return;
-      }
-
-      setTypingUser(undefined);
-    };
-
-    const ensureConversationExists = async (conversationId: string) => {
-      const conversationExists = useChatStore
-        .getState()
-        .conversations.some((conversation) => conversation.id === conversationId);
-
-      if (conversationExists) {
-        return;
-      }
-
-      const conversation = await getConversation(conversationId);
-      useChatStore
-        .getState()
-        .addConversation(toUIConversation(conversation, currentUserId));
-    };
-
-    const handleNewMessage = async (newMsg: ApiMessage) => {
-      try {
-        await ensureConversationExists(newMsg.conversationId);
-      } catch (error) {
-        console.error("Error loading conversation:", error);
-      }
-
-      const currentActiveId = useChatStore.getState().activeConversationId;
-      const senderId =
-        typeof newMsg.senderId === "object"
-          ? newMsg.senderId._id
-          : newMsg.senderId;
-
-      if (newMsg.conversationId === currentActiveId) {
-        useChatStore.getState().addMessage(toUIMessage(newMsg));
-
-        if (senderId !== currentUserId) {
-          useChatStore.getState().markConversationRead(currentActiveId);
-          socketService.emit("markAsRead", {
-            conversationId: currentActiveId,
-            userId: currentUserId,
-          });
-        }
-      }
-
-      useChatStore
-        .getState()
-        .updateConversationLastMessage(newMsg.conversationId, newMsg, {
-          activeConversationId: currentActiveId,
-          currentUserId,
-        });
-    };
-
-    const handleMessagesRead = (payload: {
-      conversationId: string;
-      userId: string;
-      messageIds: string[];
-    }) => {
-      const currentActiveId = useChatStore.getState().activeConversationId;
-      if (payload.conversationId !== currentActiveId) {
-        return;
-      }
-
-      useChatStore
-        .getState()
-        .markMessagesRead(payload.messageIds, payload.userId);
-
-      if (payload.userId === currentUserId) {
-        useChatStore.getState().markConversationRead(payload.conversationId);
-      }
-    };
-
-    const handleMessageUpdated = (updatedMsg: ApiMessage) => {
-      const currentActiveId = useChatStore.getState().activeConversationId;
-      if (updatedMsg.conversationId !== currentActiveId) return;
-      useChatStore.getState().updateMessageContent(updatedMsg._id, updatedMsg.content);
-    };
-
-    const handleMessageDeleted = (payload: { messageId: string }) => {
-      useChatStore.getState().removeMessage(payload.messageId);
-    };
-
-    socketService.connect(accessToken);
-    socketService.on("presence:update", handlePresenceUpdate);
-    socketService.on("presence:list", handlePresenceList);
-    socketService.on("userTyping", handleUserTyping);
-    socketService.on("newMessage", handleNewMessage);
-    socketService.on("messagesRead", handleMessagesRead);
-    socketService.on("messageUpdated", handleMessageUpdated);
-    socketService.on("messageDeleted", handleMessageDeleted);
-
-    const announceOnline = () => {
-      socketService.emit("presence:online", { userId: currentUserId });
-    };
-
-    socketService.on("connect", announceOnline);
-    announceOnline();
-
-    return () => {
-      socketService.off("connect", announceOnline);
-      socketService.off("presence:update");
-      socketService.off("presence:list");
-      socketService.off("userTyping");
-      socketService.off("newMessage");
-      socketService.off("messagesRead");
-      socketService.off("messageUpdated");
-      socketService.off("messageDeleted");
-      socketService.disconnect();
-    };
-  }, [accessToken, user?.id, setUserOnlineStatus]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    if (users.length === 0) return;
-    socketService.emit("presence:online", { userId: user.id });
-  }, [user?.id, users.length]);
-
-  const handleSendMessage = useCallback(
-    (content: string, type?: string, imageUrl?: string) => {
-      if (!user || !activeConversationId) return;
-
-      socketService.emit("sendMessage", {
-        conversationId: activeConversationId,
-        senderId: user.id,
-        content,
-        type,
-        imageUrl,
-      });
-    },
-    [user, activeConversationId],
-  );
-
-  const handleTypingChange = useCallback(
-    (isTyping: boolean) => {
-      if (!user || !activeConversationId) return;
-
-      socketService.emit("typing", {
-        conversationId: activeConversationId,
-        userId: user.id,
-        isTyping,
-      });
-    },
-    [user, activeConversationId],
-  );
-
-  const handleEditMessage = useCallback(
-    (messageId: string, content: string) => {
-      if (!user) return;
-      const conversationId = useChatStore.getState().activeConversationId;
-      socketService.emit("updateMessage", {
-        messageId,
-        senderId: user.id,
-        content,
-        conversationId,
-      });
-    },
-    [user],
-  );
-
-  const handleDeleteMessage = useCallback(
-    (messageId: string) => {
-      if (!user) return;
-      const conversationId = useChatStore.getState().activeConversationId;
-      socketService.emit("deleteMessage", {
-        messageId,
-        senderId: user.id,
-        conversationId,
-      });
-    },
-    [user],
+  const loading = useChatStore((state) => state.loading);
+  const activeConversation = useChatStore((state) =>
+    state.activeConversation(),
   );
 
   if (!user) return null;
-
-  if (loading) {
-    return (
-      <div
-        className="flex h-screen items-center justify-center noise-bg"
-        style={{ background: "var(--nx-surface-0)" }}
-      >
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center accent-gradient animate-glow-pulse">
-            <MessageSquare className="w-7 h-7 text-white" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div
-              className="w-1.5 h-1.5 rounded-full animate-bounce"
-              style={{
-                background: "var(--nx-accent-400)",
-                animationDelay: "0ms",
-              }}
-            />
-            <div
-              className="w-1.5 h-1.5 rounded-full animate-bounce"
-              style={{
-                background: "var(--nx-accent-400)",
-                animationDelay: "150ms",
-              }}
-            />
-            <div
-              className="w-1.5 h-1.5 rounded-full animate-bounce"
-              style={{
-                background: "var(--nx-accent-400)",
-                animationDelay: "300ms",
-              }}
-            />
-          </div>
-          <p
-            className="text-sm font-medium"
-            style={{ color: "var(--nx-text-tertiary)" }}
-          >
-            Loading your conversations...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const currentConversation = activeConversation();
+  if (loading) return <ChatLoadingScreen />;
 
   return (
     <div
@@ -382,7 +48,7 @@ const Index = () => {
     >
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel defaultSize={25} minSize={20} maxSize={35}>
-          <AppSidebar currentUser={user} />
+          <AppSidebar />
         </ResizablePanel>
 
         <ResizableHandle
@@ -392,16 +58,15 @@ const Index = () => {
 
         <ResizablePanel defaultSize={50} minSize={30}>
           <ChatPanel
-            onSendMessage={handleSendMessage}
-            isTyping={Boolean(typingUser)}
             typingUser={typingUser}
-            onTypingChange={handleTypingChange}
-            onEditMessage={handleEditMessage}
-            onDeleteMessage={handleDeleteMessage}
+            onSendMessage={sendMessage}
+            onTypingChange={setTyping}
+            onEditMessage={editMessage}
+            onDeleteMessage={deleteMessage}
           />
         </ResizablePanel>
 
-        {currentConversation && (
+        {activeConversation && (
           <>
             <ResizableHandle
               className="w-px"
@@ -413,13 +78,11 @@ const Index = () => {
               maxSize={35}
               className="hidden lg:block"
             >
-              <UserDetailPanel user={currentConversation.user} />
+              <UserDetailPanel user={activeConversation.user} />
             </ResizablePanel>
           </>
         )}
       </ResizablePanelGroup>
     </div>
   );
-};
-
-export default Index;
+}

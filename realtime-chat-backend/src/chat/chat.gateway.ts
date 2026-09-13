@@ -1,41 +1,277 @@
+import { Logger } from '@nestjs/common';
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  MessageBody,
-  ConnectedSocket,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { MessagesService } from '../messages/messages.service';
-import { ConversationsService } from '../conversations/conversations.service';
 
+import { ConversationsService } from '../conversations/conversations.service';
+import { MessagesService } from '../messages/messages.service';
+import {
+  DeleteMessagePayload,
+  JoinConversationPayload,
+  MarkAsReadPayload,
+  PresenceOnlinePayload,
+  SendMessagePayload,
+  TypingPayload,
+  UpdateMessagePayload,
+} from './chat.types';
+import { PresenceService } from './presence.service';
+
+/**
+ * Gateway = "controller" của WebSocket.
+ *
+ * Hai khái niệm quan trọng của Socket.IO được dùng ở đây:
+ * - socket: một kết nối của một tab trình duyệt.
+ * - room: một cái tên để gom nhiều socket lại, gửi một lần là cả nhóm cùng nhận.
+ *
+ * Trong file này có 2 loại room:
+ * - room theo cuộc trò chuyện (tên = conversationId): những ai đang MỞ đoạn chat đó.
+ * - room theo user (tên = "user:<userId>"): tất cả tab của một người, kể cả khi họ
+ *   đang xem đoạn chat khác -> dùng để báo có tin nhắn mới ngoài sidebar.
+ *
+ * Lưu ý (bản rút gọn cho người mới học): server đang tin tưởng `senderId` / `userId`
+ * do client gửi lên. Ứng dụng thật nên xác thực JWT ngay khi socket kết nối.
+ */
 @WebSocketGateway({
-  cors: {
-    origin: '*', // Trong production nên chỉ định cụ thể domain
-  },
+  cors: { origin: '*' }, // khi deploy nên ghi rõ domain của frontend
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  /** Server của Socket.IO, dùng để gửi sự kiện cho client. */
   @WebSocketServer()
   server!: Server;
 
-  private socketToUser = new Map<string, string>();
-  private userToSockets = new Map<string, Set<string>>();
+  private readonly logger = new Logger(ChatGateway.name);
 
   constructor(
-    private messagesService: MessagesService,
-    private conversationsService: ConversationsService,
+    private readonly messagesService: MessagesService,
+    private readonly conversationsService: ConversationsService,
+    private readonly presenceService: PresenceService,
   ) {}
 
-  private getErrorMessage(error: unknown) {
-    return error instanceof Error ? error.message : 'Unknown error';
+  // --------------------------------------------------------------------------
+  // Kết nối / ngắt kết nối
+  // --------------------------------------------------------------------------
+
+  handleConnection(client: Socket) {
+    this.logger.log(`Socket kết nối: ${client.id}`);
   }
 
+  handleDisconnect(client: Socket) {
+    this.logger.log(`Socket ngắt kết nối: ${client.id}`);
+
+    const result = this.presenceService.removeSocket(client.id);
+    if (!result) {
+      return; // socket này chưa gắn với user nào
+    }
+
+    // Báo cho mọi người: user vừa đóng một tab.
+    // online = false khi người đó đã đóng hết tab.
+    this.server.emit('presence:update', {
+      userId: result.userId,
+      online: result.isOnline,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Trạng thái online
+  // --------------------------------------------------------------------------
+
+  /** Client gửi ngay sau khi đăng nhập: { userId }. */
+  @SubscribeMessage('presence:online')
+  handlePresenceOnline(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: PresenceOnlinePayload,
+  ) {
+    const userId = payload?.userId;
+    if (!userId) {
+      return { status: 'error', message: 'Thiếu userId' };
+    }
+
+    this.presenceService.addSocket(userId, client.id);
+    void client.join(this.getUserRoom(userId));
+
+    // Báo cho tất cả mọi người biết user này vừa online.
+    this.server.emit('presence:update', { userId, online: true });
+
+    // Riêng người vừa vào thì gửi luôn danh sách những ai đang online.
+    client.emit('presence:list', {
+      onlineUserIds: this.presenceService.getOnlineUserIds(),
+    });
+
+    return { status: 'ok' };
+  }
+
+  // --------------------------------------------------------------------------
+  // Tin nhắn
+  // --------------------------------------------------------------------------
+
+  /** Vào room của một cuộc trò chuyện khi người dùng mở đoạn chat. */
+  @SubscribeMessage('joinConversation')
+  handleJoinConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: JoinConversationPayload,
+  ) {
+    const { conversationId } = payload;
+    void client.join(conversationId);
+
+    this.logger.log(`Socket ${client.id} vào phòng ${conversationId}`);
+
+    return { status: 'joined', conversationId };
+  }
+
+  /** Gửi tin nhắn mới. */
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(@MessageBody() payload: SendMessagePayload) {
+    try {
+      // 1. Lưu tin nhắn vào database.
+      const message = await this.messagesService.create(payload.senderId, {
+        conversationId: payload.conversationId,
+        content: payload.content ?? '',
+        type: payload.type,
+        imageUrl: payload.imageUrl,
+      });
+
+      // 2. Cập nhật "tin nhắn cuối" để danh sách chat sắp xếp lại đúng thứ tự.
+      await this.conversationsService.updateLastMessage(
+        payload.conversationId,
+        message._id.toString(),
+      );
+
+      // 3. Gửi cho cả hai người, kể cả người đang xem đoạn chat khác.
+      await this.emitToParticipants(
+        payload.conversationId,
+        'newMessage',
+        message,
+      );
+
+      return { status: 'sent', message };
+    } catch (error) {
+      return this.toErrorResponse(error, 'Gửi tin nhắn thất bại');
+    }
+  }
+
+  /** Sửa nội dung tin nhắn. */
+  @SubscribeMessage('updateMessage')
+  async handleUpdateMessage(@MessageBody() payload: UpdateMessagePayload) {
+    try {
+      const message = await this.messagesService.update(
+        payload.messageId,
+        payload.senderId,
+        payload.content,
+      );
+
+      // Chỉ người đang mở đoạn chat mới cần biết nội dung vừa đổi.
+      this.server.to(payload.conversationId).emit('messageUpdated', message);
+
+      return { status: 'updated', message };
+    } catch (error) {
+      return this.toErrorResponse(error, 'Sửa tin nhắn thất bại');
+    }
+  }
+
+  /** Xoá tin nhắn. */
+  @SubscribeMessage('deleteMessage')
+  async handleDeleteMessage(@MessageBody() payload: DeleteMessagePayload) {
+    try {
+      await this.messagesService.remove(payload.messageId, payload.senderId);
+
+      this.server.to(payload.conversationId).emit('messageDeleted', {
+        messageId: payload.messageId,
+      });
+
+      return { status: 'deleted', messageId: payload.messageId };
+    } catch (error) {
+      return this.toErrorResponse(error, 'Xoá tin nhắn thất bại');
+    }
+  }
+
+  /** Báo đang gõ / ngừng gõ. */
+  @SubscribeMessage('typing')
+  handleTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: TypingPayload,
+  ) {
+    // client.to(...) gửi cho những người KHÁC trong phòng, không gửi lại cho chính mình.
+    client.to(payload.conversationId).emit('userTyping', {
+      conversationId: payload.conversationId,
+      userId: payload.userId,
+      isTyping: payload.isTyping,
+    });
+  }
+
+  /** Đánh dấu đã đọc toàn bộ tin nhắn trong một cuộc trò chuyện. */
+  @SubscribeMessage('markAsRead')
+  async handleMarkAsRead(@MessageBody() payload: MarkAsReadPayload) {
+    const conversationId = payload?.conversationId;
+    const userId = payload?.userId;
+
+    if (!conversationId || !userId) {
+      return { status: 'error', message: 'Thiếu conversationId hoặc userId' };
+    }
+
+    try {
+      const { messageIds } = await this.messagesService.markConversationAsRead(
+        conversationId,
+        userId,
+      );
+
+      // Không có tin nào mới được đọc thì khỏi phát sự kiện cho người khác.
+      if (messageIds.length > 0) {
+        this.server.to(conversationId).emit('messagesRead', {
+          conversationId,
+          userId,
+          messageIds,
+        });
+      }
+
+      return { status: 'ok', messageIds };
+    } catch (error) {
+      return this.toErrorResponse(error, 'Đánh dấu đã đọc thất bại');
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Các hàm dùng chung
+  // --------------------------------------------------------------------------
+
+  /** Tên room riêng của một user (gom mọi tab của người đó). */
   private getUserRoom(userId: string) {
     return `user:${userId}`;
   }
 
+  /**
+   * Gửi sự kiện tới TẤT CẢ thành viên của cuộc trò chuyện, kể cả người đang
+   * không mở đoạn chat đó (nhờ room riêng của từng user).
+   */
+  private async emitToParticipants(
+    conversationId: string,
+    event: string,
+    payload: unknown,
+  ) {
+    const conversation =
+      await this.conversationsService.findById(conversationId);
+
+    const rooms =
+      conversation?.participants.map((participant) =>
+        this.getUserRoom(this.getParticipantId(participant)),
+      ) ?? [];
+
+    // Không tìm thấy cuộc trò chuyện thì gửi tạm vào room của cuộc trò chuyện.
+    // Không được truyền mảng rỗng cho .to(), vì khi đó Socket.IO gửi cho TẤT CẢ.
+    const target = rooms.length > 0 ? rooms : conversationId;
+    this.server.to(target).emit(event, payload);
+  }
+
+  /**
+   * participants đã được .populate() nên mỗi phần tử là object user;
+   * nếu chưa populate thì nó là ObjectId. Hàm này lấy ra id dạng chuỗi cho cả hai.
+   */
   private getParticipantId(participant: unknown) {
     if (
       participant &&
@@ -48,299 +284,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return String(participant);
   }
 
-  private async emitToConversationUsers(
-    conversationId: string,
-    event: string,
-    payload: unknown,
-  ) {
-    const conversation = await this.conversationsService.findById(
-      conversationId,
-    );
+  /** Gom một chỗ: ghi log lỗi ở server và trả về thông báo gọn cho client. */
+  private toErrorResponse(error: unknown, context: string) {
+    const message = error instanceof Error ? error.message : 'Đã có lỗi xảy ra';
+    this.logger.error(`${context}: ${message}`);
 
-    const rooms =
-      conversation?.participants.map((participant) =>
-        this.getUserRoom(this.getParticipantId(participant)),
-      ) ?? [];
-
-    if (rooms.length === 0) {
-      this.server.to(conversationId).emit(event, payload);
-      return;
-    }
-
-    let target = this.server.to(rooms[0]);
-    rooms.slice(1).forEach((room) => {
-      target = target.to(room);
-    });
-
-    target.emit(event, payload);
-  }
-
-  handleConnection(client: Socket) {
-    console.log(`✅ Client connected: ${client.id}`);
-  }
-
-  handleDisconnect(client: Socket) {
-    this.handleUserDisconnected(client.id);
-    console.log(`❌ Client disconnected: ${client.id}`);
-  }
-
-  private handleUserDisconnected(socketId: string) {
-    const userId = this.socketToUser.get(socketId);
-    if (!userId) {
-      return;
-    }
-
-    this.socketToUser.delete(socketId);
-
-    const userSockets = this.userToSockets.get(userId);
-    if (!userSockets) {
-      return;
-    }
-
-    userSockets.delete(socketId);
-    const isOnline = userSockets.size > 0;
-
-    if (!isOnline) {
-      this.userToSockets.delete(userId);
-    }
-
-    this.server.emit('presence:update', {
-      userId,
-      online: isOnline,
-    });
-  }
-
-  @SubscribeMessage('presence:online')
-  handlePresenceOnline(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { userId: string },
-  ) {
-    const { userId } = payload;
-
-    if (!userId) {
-      return { status: 'error', message: 'userId is required' };
-    }
-
-    this.socketToUser.set(client.id, userId);
-
-    const existingSockets = this.userToSockets.get(userId) ?? new Set<string>();
-    existingSockets.add(client.id);
-    this.userToSockets.set(userId, existingSockets);
-
-    void client.join(this.getUserRoom(userId));
-
-    this.server.emit('presence:update', {
-      userId,
-      online: true,
-    });
-
-    client.emit('presence:list', {
-      onlineUserIds: Array.from(this.userToSockets.keys()),
-    });
-
-    return { status: 'ok' };
-  }
-
-  /**
-   * Join vào room của cuộc trò chuyện
-   * Client gửi: { conversationId: string }
-   */
-  @SubscribeMessage('joinConversation')
-  handleJoinConversation(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { conversationId: string },
-  ) {
-    const { conversationId } = payload;
-
-    void client.join(conversationId);
-
-    console.log(`👥 Client ${client.id} joined conversation ${conversationId}`);
-
-    return { status: 'joined', conversationId };
-  }
-
-  /**
-   * CREATE - Gửi tin nhắn mới (Realtime qua Socket)
-   * Client gửi: { conversationId, senderId, content?, type?, imageUrl? }
-   */
-  @SubscribeMessage('sendMessage')
-  async handleSendMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      conversationId: string;
-      senderId: string;
-      content?: string; // Nội dung text (optional với tin nhắn ảnh)
-      type?: string; // 'text' | 'emoji' | 'image'
-      imageUrl?: string; // Ảnh base64 (chỉ khi type = 'image')
-    },
-  ) {
-    try {
-      // 1. Lưu tin nhắn vào database
-      const newMessage = await this.messagesService.create(payload.senderId, {
-        conversationId: payload.conversationId,
-        content: payload.content || '',
-        type: payload.type,
-        imageUrl: payload.imageUrl,
-      });
-
-      console.log('New message saved:', newMessage._id);
-
-      // 2. Cập nhật lastMessage trong conversation
-      await this.conversationsService.updateLastMessage(
-        payload.conversationId,
-        newMessage._id.toString(),
-      );
-
-      // 3. Gửi tin nhắn đến tất cả người trong room (bao gồm cả người gửi)
-      await this.emitToConversationUsers(
-        payload.conversationId,
-        'newMessage',
-        newMessage,
-      );
-
-      // 4. Trả về cho người gửi
-      return { status: 'sent', message: newMessage };
-    } catch (error) {
-      console.error('Error sending message:', error);
-      return { status: 'error', message: this.getErrorMessage(error) };
-    }
-  }
-
-  /**
-   * UPDATE - Sửa tin nhắn (Realtime qua Socket)
-   * Client gửi: { messageId: string, senderId: string, content: string, conversationId: string }
-   */
-  @SubscribeMessage('updateMessage')
-  async handleUpdateMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      messageId: string;
-      senderId: string;
-      content: string;
-      conversationId: string;
-    },
-  ) {
-    try {
-      // 1. Cập nhật tin nhắn trong database
-      const updatedMessage = await this.messagesService.update(
-        payload.messageId,
-        payload.senderId,
-        payload.content,
-      );
-
-      console.log(' Message updated:', updatedMessage._id);
-
-      // 2. Gửi tin nhắn đã sửa đến tất cả người trong room
-      this.server
-        .to(payload.conversationId)
-        .emit('messageUpdated', updatedMessage);
-
-      return { status: 'updated', message: updatedMessage };
-    } catch (error) {
-      console.error(' Error updating message:', error);
-      return { status: 'error', message: this.getErrorMessage(error) };
-    }
-  }
-
-  /**
-   * DELETE - Xóa tin nhắn (Realtime qua Socket)
-   * Client gửi: { messageId: string, senderId: string, conversationId: string }
-   */
-  @SubscribeMessage('deleteMessage')
-  async handleDeleteMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      messageId: string;
-      senderId: string;
-      conversationId: string;
-    },
-  ) {
-    try {
-      // 1. Xóa tin nhắn trong database
-      const result = await this.messagesService.delete(
-        payload.messageId,
-        payload.senderId,
-      );
-
-      console.log('Message deleted:', payload.messageId);
-
-      // 2. Thông báo cho tất cả người trong room
-      this.server.to(payload.conversationId).emit('messageDeleted', {
-        messageId: payload.messageId,
-      });
-
-      return { status: 'deleted', ...result };
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      return { status: 'error', message: this.getErrorMessage(error) };
-    }
-  }
-
-  /**
-   * Typing indicator
-   * Client gửi: { conversationId: string, userId: string, isTyping: boolean }
-   */
-  @SubscribeMessage('typing')
-  handleTyping(
-    @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      conversationId: string;
-      userId: string;
-      isTyping: boolean;
-    },
-  ) {
-    // Gửi cho tất cả người khác trong room (không gửi lại cho chính người gửi)
-    client.to(payload.conversationId).emit('userTyping', {
-      conversationId: payload.conversationId,
-      userId: payload.userId,
-      isTyping: payload.isTyping,
-    });
-  }
-
-  /**
-   * Read receipts
-   * Client gửi: { conversationId: string, userId: string }
-   */
-  @SubscribeMessage('markAsRead')
-  async handleMarkAsRead(
-    @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      conversationId: string;
-      userId: string;
-    },
-  ) {
-    try {
-      const { conversationId, userId } = payload;
-
-      if (!conversationId || !userId) {
-        return {
-          status: 'error',
-          message: 'conversationId and userId are required',
-        };
-      }
-
-      const { messageIds } = await this.messagesService.markConversationAsRead(
-        conversationId,
-        userId,
-      );
-
-      if (messageIds.length > 0) {
-        this.server.to(conversationId).emit('messagesRead', {
-          conversationId,
-          userId,
-          messageIds,
-        });
-      }
-
-      return { status: 'ok', messageIds };
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-      return { status: 'error', message: this.getErrorMessage(error) };
-    }
+    return { status: 'error', message };
   }
 }

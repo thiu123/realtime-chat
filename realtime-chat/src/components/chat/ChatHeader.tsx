@@ -1,13 +1,28 @@
-import { User } from "@/types/chat";
+import { MoreVertical, Phone, Search, Video } from "lucide-react";
+
 import { ChatAvatar } from "./Avatar";
-import { Phone, Video, Search, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { User } from "@/types/chat";
 
 interface ChatHeaderProps {
+  /** Người đang chat cùng. */
   user: User;
 }
 
+/** Các nút gọi điện / gọi video / tìm kiếm mới chỉ là giao diện, chưa có chức năng. */
+const PLACEHOLDER_ACTIONS = [
+  { icon: Phone, label: "Voice call" },
+  { icon: Video, label: "Video call" },
+  { icon: Search, label: "Search in conversation" },
+  { icon: MoreVertical, label: "More options" },
+];
+
+/** Thanh trên cùng của khung chat: tên + trạng thái online của người kia. */
 export function ChatHeader({ user }: ChatHeaderProps) {
+  const statusColor = user.online
+    ? "var(--nx-online)"
+    : "var(--nx-text-tertiary)";
+
   return (
     <div
       className="h-16 w-full px-6 flex items-center justify-between"
@@ -23,15 +38,20 @@ export function ChatHeader({ user }: ChatHeaderProps) {
           size="sm"
           online={user.online}
         />
+
         <div>
-          <h2 className="font-semibold text-white text-sm">{user?.name}</h2>
+          <h2 className="font-semibold text-white text-sm">{user.name}</h2>
           <p
             className="text-xs flex items-center gap-1.5"
-            style={{ color: user.online ? "var(--nx-online)" : "var(--nx-text-tertiary)" }}
+            style={{ color: statusColor }}
           >
             <span
               className="w-1.5 h-1.5 rounded-full"
-              style={{ background: user.online ? "var(--nx-online)" : "var(--nx-text-ghost)" }}
+              style={{
+                background: user.online
+                  ? "var(--nx-online)"
+                  : "var(--nx-text-ghost)",
+              }}
             />
             {user.online ? "Online" : "Offline"}
           </p>
@@ -39,21 +59,15 @@ export function ChatHeader({ user }: ChatHeaderProps) {
       </div>
 
       <div className="flex items-center gap-0.5">
-        {[Phone, Video, Search, MoreVertical].map((Icon, i) => (
+        {PLACEHOLDER_ACTIONS.map(({ icon: Icon, label }) => (
           <Button
-            key={i}
+            key={label}
             variant="ghost"
             size="icon"
-            className="rounded-lg transition-all duration-200 h-9 w-9"
+            title={`${label} (coming soon)`}
+            disabled
+            className="rounded-lg h-9 w-9"
             style={{ color: "var(--nx-text-tertiary)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "white";
-              e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--nx-text-tertiary)";
-              e.currentTarget.style.background = "transparent";
-            }}
           >
             <Icon className="w-[18px] h-[18px]" />
           </Button>

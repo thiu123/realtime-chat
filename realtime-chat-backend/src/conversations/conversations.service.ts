@@ -1,92 +1,75 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+
+import { Message, MessageDocument } from '../messages/schemas/message.schema';
 import {
   Conversation,
   ConversationDocument,
 } from './schemas/conversation.schema';
-import { CreateConversationDto } from './dto/create-conversation.dto';
-import { Message, MessageDocument } from '../messages/schemas/message.schema';
+
+/** Các field của User được trả kèm khi populate (không lộ email/password thừa). */
+const USER_FIELDS = 'name email avatar';
 
 @Injectable()
 export class ConversationsService {
   constructor(
     @InjectModel(Conversation.name)
-    private conversationModel: Model<ConversationDocument>,
+    private readonly conversationModel: Model<ConversationDocument>,
+    // Cần model Message để đếm số tin nhắn chưa đọc của từng cuộc trò chuyện.
     @InjectModel(Message.name)
-    private messageModel: Model<MessageDocument>,
+    private readonly messageModel: Model<MessageDocument>,
   ) {}
 
   /**
-   * Tạo cuộc trò chuyện mới giữa 2 users
+   * Lấy cuộc trò chuyện giữa 2 người; chưa có thì tạo mới.
+   * Nhờ vậy client chỉ cần gọi 1 API duy nhất khi bấm vào một người bạn.
    */
-  async createConversation(
-    userId: string,
-    createConversationDto: CreateConversationDto,
-  ): Promise<Conversation> {
-    const { participantId } = createConversationDto;
+  async createOrGet(userId: string, participantId: string) {
+    if (userId === participantId) {
+      throw new BadRequestException('Không thể tự trò chuyện với chính mình');
+    }
 
-    // Kiểm tra xem conversation đã tồn tại chưa
-    const existing = await this.findConversationBetweenUsers(
-      userId,
-      participantId,
-    );
+    const existing = await this.findBetweenUsers(userId, participantId);
     if (existing) {
       return existing;
     }
 
-    // Tạo mới
-    const newConversation = new this.conversationModel({
+    const conversation = new this.conversationModel({
       participants: [userId, participantId],
     });
+    await conversation.save();
 
-    await newConversation.save();
-    return newConversation.populate('participants', 'name email avatar');
+    // populate để client nhận luôn tên + avatar của 2 người tham gia.
+    return conversation.populate('participants', USER_FIELDS);
   }
 
   /**
-   * Tìm tất cả conversations của 1 user
+   * Danh sách cuộc trò chuyện của một user, kèm số tin nhắn chưa đọc.
+   * Sắp xếp theo tin nhắn mới nhất giống các app chat thông thường.
    */
-  async findConversationsByUserId(userId: string) {
+  async findAllByUserId(userId: string) {
     if (!Types.ObjectId.isValid(userId)) {
       return [];
     }
 
-    const userObjectId = new Types.ObjectId(userId);
+    // .lean() trả về object JavaScript thuần (nhẹ hơn document của Mongoose)
+    // nhờ vậy bên dưới có thể thoải mái thêm field unreadCount.
     const conversations = await this.conversationModel
-      .find({
-        participants: userId,
-      })
-      .populate('participants', 'name email avatar')
+      .find({ participants: userId })
+      .populate('participants', USER_FIELDS)
       .populate('lastMessage')
       .sort({ lastMessageAt: -1 })
       .lean()
       .exec();
 
-    const conversationIds = conversations.map((conversation) =>
-      conversation._id,
-    );
-
-    const unreadCounts = await this.messageModel
-      .aggregate([
-        {
-          $match: {
-            conversationId: { $in: conversationIds },
-            senderId: { $ne: userObjectId },
-            readBy: { $nin: [userObjectId] },
-          },
-        },
-        {
-          $group: {
-            _id: '$conversationId',
-            count: { $sum: 1 },
-          },
-        },
-      ])
-      .exec();
-
-    const unreadCountByConversation = new Map(
-      unreadCounts.map((item) => [item._id.toString(), item.count]),
+    const unreadCountByConversation = await this.countUnreadMessages(
+      userId,
+      conversations.map((conversation) => conversation._id),
     );
 
     return conversations.map((conversation) => ({
@@ -96,56 +79,89 @@ export class ConversationsService {
     }));
   }
 
-  /**
-   * Tìm conversation giữa 2 users cụ thể
-   */
-  async findConversationBetweenUsers(
-    userId1: string,
-    userId2: string,
-  ): Promise<Conversation | null> {
+  /** Tìm cuộc trò chuyện chứa đúng 2 người này ($all: chứa tất cả id trong mảng). */
+  findBetweenUsers(userId: string, participantId: string) {
     return this.conversationModel
-      .findOne({
-        participants: { $all: [userId1, userId2] },
-      })
-      .populate('participants', 'name email avatar')
+      .findOne({ participants: { $all: [userId, participantId] } })
+      .populate('participants', USER_FIELDS)
       .populate('lastMessage')
       .exec();
   }
 
-  /**
-   * Tìm conversation theo ID
-   */
-  async findById(conversationId: string): Promise<Conversation | null> {
+  /** Tìm theo id, trả về null nếu không có (dùng cho luồng nội bộ như ChatGateway). */
+  async findById(conversationId: string) {
+    if (!Types.ObjectId.isValid(conversationId)) {
+      return null;
+    }
+
     return this.conversationModel
       .findById(conversationId)
-      .populate('participants', 'name email avatar')
+      .populate('participants', USER_FIELDS)
       .populate('lastMessage')
       .exec();
   }
 
-  /**
-   * Cập nhật lastMessage và lastMessageAt cho conversation
-   */
-  async updateLastMessage(
-    conversationId: string,
-    messageId: string,
-  ): Promise<Conversation | null> {
+  /** Giống findById nhưng ném lỗi 404 nếu không tìm thấy -> dùng cho REST API. */
+  async findOne(conversationId: string) {
+    const conversation = await this.findById(conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Không tìm thấy cuộc trò chuyện');
+    }
+
+    return conversation;
+  }
+
+  /** Gọi mỗi khi có tin nhắn mới để danh sách chat luôn hiển thị đúng thứ tự. */
+  updateLastMessage(conversationId: string, messageId: string) {
     return this.conversationModel
       .findByIdAndUpdate(
         conversationId,
-        {
-          lastMessage: messageId,
-          lastMessageAt: new Date(),
-        },
+        { lastMessage: messageId, lastMessageAt: new Date() },
         { new: true },
       )
       .exec();
   }
 
+  async remove(conversationId: string) {
+    const conversation = await this.conversationModel
+      .findByIdAndDelete(conversationId)
+      .exec();
+
+    if (!conversation) {
+      throw new NotFoundException('Không tìm thấy cuộc trò chuyện');
+    }
+
+    return { message: 'Đã xoá cuộc trò chuyện' };
+  }
+
   /**
-   * Xóa conversation
+   * Đếm tin nhắn chưa đọc cho nhiều cuộc trò chuyện chỉ bằng MỘT câu truy vấn.
+   * Trả về Map<conversationId, số tin chưa đọc>.
+   *
+   * Tin được coi là chưa đọc khi: không phải do mình gửi VÀ id của mình
+   * chưa nằm trong mảng readBy.
    */
-  async deleteConversation(conversationId: string): Promise<void> {
-    await this.conversationModel.findByIdAndDelete(conversationId).exec();
+  private async countUnreadMessages(
+    userId: string,
+    conversationIds: Types.ObjectId[],
+  ) {
+    const currentUserId = new Types.ObjectId(userId);
+
+    const results = await this.messageModel
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        {
+          $match: {
+            conversationId: { $in: conversationIds },
+            senderId: { $ne: currentUserId },
+            readBy: { $nin: [currentUserId] },
+          },
+        },
+        { $group: { _id: '$conversationId', count: { $sum: 1 } } },
+      ])
+      .exec();
+
+    return new Map(
+      results.map((item) => [item._id.toString(), item.count] as const),
+    );
   }
 }

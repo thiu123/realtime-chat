@@ -1,49 +1,54 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type MessageDocument = HydratedDocument<Message>;
 
-// Các loại tin nhắn được hỗ trợ
 export enum MessageType {
-  TEXT = 'text',   // Tin nhắn văn bản thông thường
-  EMOJI = 'emoji', // Tin nhắn chỉ gồm emoji
-  IMAGE = 'image', // Tin nhắn hình ảnh
+  TEXT = 'text',
+  EMOJI = 'emoji',
+  IMAGE = 'image',
 }
 
 @Schema({ timestamps: true })
 export class Message {
+  // Lưu ý: phải dùng MongooseSchema.Types.ObjectId (không phải Types.ObjectId)
+  // thì Mongoose mới hiểu đây là khoá ngoại và tự ép chuỗi id thành ObjectId.
   @Prop({
-    type: Types.ObjectId,
+    type: MongooseSchema.Types.ObjectId,
     ref: 'Conversation',
     required: true,
-    index: true,
   })
   conversationId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
   @Prop({ type: String, enum: MessageType, default: MessageType.TEXT })
   type: MessageType;
 
-  // Nội dung văn bản (không bắt buộc nếu là tin nhắn ảnh)
-  @Prop({ type: String, required: false, default: '' })
+  /** Nội dung chữ. Có thể rỗng nếu là tin nhắn ảnh không kèm chú thích. */
+  @Prop({ type: String, default: '' })
   content: string;
 
-  // Lưu ảnh dạng base64 string (cho tin nhắn hình ảnh)
-  @Prop({ type: String, required: false })
+  /** Ảnh lưu dạng chuỗi base64 (chỉ dùng khi type = 'image'). */
+  @Prop({ type: String })
   imageUrl: string;
 
+  /**
+   * Danh sách id những người đã đọc tin nhắn này.
+   * Người gửi được thêm vào ngay lúc tạo tin nhắn.
+   */
   @Prop({
-    type: [{ type: Types.ObjectId, ref: 'User' }],
+    type: [{ type: MongooseSchema.Types.ObjectId, ref: 'User' }],
     default: [],
-    index: true,
   })
   readBy: Types.ObjectId[];
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
-// Create indexes for better query performance
-MessageSchema.index({ conversationId: 1, createdAt: -1 });
-MessageSchema.index({ senderId: 1, createdAt: -1 });
+// Index giúp truy vấn nhanh hơn:
+// - lấy tin nhắn của một cuộc trò chuyện theo thứ tự thời gian
+MessageSchema.index({ conversationId: 1, createdAt: 1 });
+// - đếm tin chưa đọc (lọc theo người gửi + người đã đọc)
+MessageSchema.index({ conversationId: 1, senderId: 1, readBy: 1 });

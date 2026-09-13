@@ -1,52 +1,51 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Message, MessageDocument } from './schemas/message.schema';
+import { Model, Types } from 'mongoose';
+
 import { CreateMessageDto } from './dto/create-message.dto';
+import { Message, MessageDocument } from './schemas/message.schema';
+
+/** Các field của người gửi được trả kèm cho client. */
+const SENDER_FIELDS = 'name email avatar';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectModel(Message.name)
-    private messageModel: Model<MessageDocument>,
+    private readonly messageModel: Model<MessageDocument>,
   ) {}
 
-  /**
-   * CREATE - Tạo tin nhắn mới
-   * @param senderId - ID người gửi
-   * @param createMessageDto - Dữ liệu tin nhắn (conversationId, content)
-   */
+  /** Tạo tin nhắn mới. */
   async create(senderId: string, createMessageDto: CreateMessageDto) {
-    const newMessage = new this.messageModel({
+    const message = new this.messageModel({
       ...createMessageDto,
       senderId,
-      readBy: [senderId],
+      readBy: [senderId], // người gửi coi như đã đọc tin của chính mình
     });
+    await message.save();
 
-    const savedMessage = await newMessage.save();
-    return await savedMessage.populate('senderId', 'name email avatar');
+    // populate để client nhận được luôn tên + avatar người gửi, khỏi gọi thêm API.
+    return message.populate('senderId', SENDER_FIELDS);
   }
 
-  /**
-   * READ - Lấy tất cả tin nhắn của 1 cuộc trò chuyện
-   * @param conversationId - ID cuộc trò chuyện
-   */
-  async findByConversation(conversationId: string) {
-    return await this.messageModel
+  /** Toàn bộ tin nhắn của một cuộc trò chuyện, sắp xếp từ cũ đến mới. */
+  findByConversation(conversationId: string) {
+    return this.messageModel
       .find({ conversationId })
-      .populate('senderId', 'name email avatar')
-      .sort({ createdAt: 1 }) // Sắp xếp từ cũ đến mới
+      .populate('senderId', SENDER_FIELDS)
+      .sort({ createdAt: 1 })
       .exec();
   }
 
-  /**
-   *  READ - Lấy 1 tin nhắn cụ thể
-   * @param messageId - ID tin nhắn
-   */
+  /** Lấy một tin nhắn, ném lỗi 404 nếu không tồn tại. */
   async findOne(messageId: string) {
     const message = await this.messageModel
       .findById(messageId)
-      .populate('senderId', 'name email')
+      .populate('senderId', SENDER_FIELDS)
       .exec();
 
     if (!message) {
@@ -56,74 +55,76 @@ export class MessagesService {
     return message;
   }
 
-  /**
-   * UPDATE - Sửa nội dung tin nhắn
-   * @param messageId - ID tin nhắn
-   * @param senderId - ID người gửi (để check quyền)
-   * @param content - Nội dung mới
-   */
+  /** Sửa nội dung tin nhắn. Chỉ người gửi mới có quyền sửa. */
   async update(messageId: string, senderId: string, content: string) {
-    const message = await this.messageModel.findOne({
-      _id: messageId,
-      senderId,
-    });
-
-    if (!message) {
-      throw new NotFoundException(
-        'Không tìm thấy tin nhắn hoặc bạn không có quyền sửa',
-      );
-    }
+    const message = await this.findOwnedMessage(messageId, senderId);
 
     message.content = content;
-    const updatedMessage = await message.save();
+    await message.save();
 
-    return await updatedMessage.populate('senderId', 'name email');
+    return message.populate('senderId', SENDER_FIELDS);
+  }
+
+  /** Xoá tin nhắn. Chỉ người gửi mới có quyền xoá. */
+  async remove(messageId: string, senderId: string) {
+    const message = await this.findOwnedMessage(messageId, senderId);
+    await message.deleteOne();
+
+    return { message: 'Đã xoá tin nhắn', messageId };
   }
 
   /**
-   * DELETE - Xóa tin nhắn
-   * @param messageId - ID tin nhắn
-   * @param senderId - ID người gửi (để check quyền)
+   * Đánh dấu đã đọc toàn bộ tin nhắn chưa đọc trong một cuộc trò chuyện.
+   * Trả về danh sách id vừa được đánh dấu để ChatGateway báo cho người gửi biết.
    */
-  async delete(messageId: string, senderId: string) {
-    const result = await this.messageModel.deleteOne({
-      _id: messageId,
-      senderId, // Chỉ cho phép người gửi xóa tin nhắn của mình
-    });
-
-    if (result.deletedCount === 0) {
-      throw new NotFoundException(
-        'Không tìm thấy tin nhắn hoặc bạn không có quyền xóa',
-      );
-    }
-
-    return { message: 'Đã xóa tin nhắn thành công', messageId };
-  }
-
   async markConversationAsRead(conversationId: string, userId: string) {
+    const filter = {
+      conversationId,
+      senderId: { $ne: userId }, // không tính tin do chính mình gửi
+      readBy: { $nin: [userId] }, // chỉ lấy tin mình chưa đọc
+    };
+
+    // Lấy id trước khi cập nhật, vì sau khi cập nhật thì không còn tin nào khớp filter.
     const unreadMessages = await this.messageModel
-      .find(
-        {
-          conversationId,
-          senderId: { $ne: userId },
-          readBy: { $nin: [userId] },
-        },
-        { _id: 1 },
-      )
+      .find(filter, { _id: 1 })
       .lean()
       .exec();
 
-    const messageIds = unreadMessages.map((m) => m._id.toString());
-
-    if (messageIds.length === 0) {
-      return { messageIds: [] };
+    if (unreadMessages.length === 0) {
+      return { messageIds: [] as string[] };
     }
 
+    const messageIds = unreadMessages.map((message) => String(message._id));
+
+    // $addToSet: thêm userId vào mảng readBy, không thêm trùng.
     await this.messageModel.updateMany(
       { _id: { $in: messageIds } },
       { $addToSet: { readBy: userId } },
     );
 
     return { messageIds };
+  }
+
+  /**
+   * Lấy tin nhắn và kiểm tra quyền sở hữu.
+   * Tách 2 loại lỗi cho rõ ràng: 404 (không có tin) và 403 (tin của người khác).
+   */
+  private async findOwnedMessage(messageId: string, senderId: string) {
+    if (!Types.ObjectId.isValid(messageId)) {
+      throw new NotFoundException('Không tìm thấy tin nhắn');
+    }
+
+    const message = await this.messageModel.findById(messageId).exec();
+    if (!message) {
+      throw new NotFoundException('Không tìm thấy tin nhắn');
+    }
+
+    if (message.senderId.toString() !== senderId) {
+      throw new ForbiddenException(
+        'Bạn chỉ thao tác được với tin nhắn của mình',
+      );
+    }
+
+    return message;
   }
 }

@@ -1,21 +1,22 @@
-import { IsOptional, IsString, IsMongoId, IsIn } from 'class-validator';
+import { IsEnum, IsMongoId, IsOptional, IsString } from 'class-validator';
+
+import { MessageType } from '../schemas/message.schema';
 
 export class CreateMessageDto {
-  @IsMongoId()
+  @IsMongoId({ message: 'conversationId không hợp lệ' })
   conversationId: string;
 
-  // Nội dung tin nhắn (optional vì tin nhắn ảnh có thể không có text)
+  /** Không bắt buộc vì tin nhắn ảnh có thể không có chữ. */
   @IsOptional()
   @IsString()
   content?: string;
 
-  // Loại tin nhắn: 'text', 'emoji', 'image'
+  /** 'text' | 'emoji' | 'image'. Bỏ trống thì mặc định là 'text'. */
   @IsOptional()
-  @IsString()
-  @IsIn(['text', 'emoji', 'image'])
-  type?: string;
+  @IsEnum(MessageType)
+  type?: MessageType;
 
-  // Ảnh dạng base64 string (chỉ dùng khi type = 'image')
+  /** Ảnh dạng base64, chỉ dùng khi type = 'image'. */
   @IsOptional()
   @IsString()
   imageUrl?: string;

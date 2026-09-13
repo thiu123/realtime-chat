@@ -1,106 +1,76 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import NextImage from "next/image";
-import { Plus, Mic, Send, X, Image as ImageIcon } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+import { Mic, Plus, Send } from "lucide-react";
+import { useRef, useState } from "react";
+
 import { EmojiPickerButton } from "./EmojiPicker";
+import { ImageAttachmentPreview } from "./ImageAttachmentPreview";
+import { TypingIndicator } from "./TypingIndicator";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useTypingNotifier } from "@/hooks/useTypingNotifier";
+import type { MessageType } from "@/types/api";
+
+/** Ảnh gửi kèm được lưu base64 trong MongoDB nên phải giới hạn dung lượng. */
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 
 interface MessageInputProps {
-  onSend: (message: string, type?: string, imageUrl?: string) => void;
-  isTyping?: boolean;
   typingUser?: string;
-  onTypingChange?: (isTyping: boolean) => void;
+  onSend: (content: string, type?: MessageType, imageUrl?: string) => void;
+  onTypingChange: (isTyping: boolean) => void;
 }
 
-export function MessageInput({ onSend, isTyping, typingUser, onTypingChange }: MessageInputProps) {
-  const [message, setMessage] = useState("");
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+export function MessageInput({
+  typingUser,
+  onSend,
+  onTypingChange,
+}: MessageInputProps) {
+  const [text, setText] = useState("");
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stopTyping = () => {
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
+  const { handleInputChange, stopTyping } = useTypingNotifier(onTypingChange);
 
-    onTypingChange?.(false);
-  };
-
-  const startTyping = (value: string) => {
-    if (!value.trim()) {
-      stopTyping();
-      return;
-    }
-
-    onTypingChange?.(true);
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      onTypingChange?.(false);
-      typingTimeoutRef.current = null;
-    }, 1200);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, []);
+  const canSend = Boolean(text.trim() || imageBase64);
 
   const handleSend = () => {
-    if (imagePreview) {
-      onSend(message.trim(), "image", imagePreview);
-      setMessage("");
-      setImagePreview(null);
-      stopTyping();
-      return;
+    if (!canSend) return;
+
+    if (imageBase64) {
+      // Ảnh có thể kèm chú thích, nên vẫn gửi cả phần chữ.
+      onSend(text.trim(), "image", imageBase64);
+      setImageBase64(null);
+    } else {
+      onSend(text.trim(), "text");
     }
-    if (message.trim()) {
-      onSend(message, "text");
-      setMessage("");
-      stopTyping();
-    }
+
+    setText("");
+    stopTyping();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       handleSend();
     }
   };
 
-  const handleEmojiSelect = (emoji: string) => {
-    setMessage((prev) => prev + emoji);
-  };
+  const handlePickImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Xoá value ngay để chọn lại đúng file vừa rồi vẫn kích hoạt onChange.
+    event.target.value = "";
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Image is too large! Please choose an image under 2MB.");
+    if (file.size > MAX_IMAGE_SIZE) {
+      alert("Ảnh quá lớn! Hãy chọn ảnh dưới 2MB.");
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setImagePreview(base64);
-    };
+    reader.onload = () => setImageBase64(reader.result as string);
     reader.readAsDataURL(file);
-
-    e.target.value = "";
   };
-
-  const canSend = message.trim() || imagePreview;
 
   return (
     <div
@@ -110,68 +80,24 @@ export function MessageInput({ onSend, isTyping, typingUser, onTypingChange }: M
         borderTop: "1px solid var(--nx-glass-border)",
       }}
     >
-      {/* Typing Indicator */}
-      {isTyping && (
-        <div className="flex items-center gap-2 mb-3 text-sm" style={{ color: "var(--nx-text-tertiary)" }}>
-          <Avatar className="w-6 h-6">
-            <AvatarFallback className="text-xs" style={{ background: "var(--nx-surface-4)", color: "var(--nx-text-tertiary)" }}>
-              {typingUser?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
-          <span className="flex items-center gap-1">
-            <span className="animate-bounce" style={{ color: "var(--nx-accent-400)" }}>●</span>
-            <span className="animate-bounce" style={{ color: "var(--nx-accent-400)", animationDelay: "0.2s" }}>●</span>
-            <span className="animate-bounce" style={{ color: "var(--nx-accent-400)", animationDelay: "0.4s" }}>●</span>
-            <span className="ml-1">{typingUser || "User"} is typing...</span>
-          </span>
-        </div>
-      )}
+      {typingUser && <TypingIndicator userName={typingUser} />}
 
-      {/* Image Preview */}
-      {imagePreview && (
-        <div className="mb-3 relative inline-block">
-          <NextImage
-            src={imagePreview}
-            alt="Image preview"
-            className="max-h-32 max-w-xs rounded-xl object-cover"
-            width={320}
-            height={128}
-            unoptimized
-            style={{ border: "2px solid var(--nx-accent-500)" }}
-          />
-          <button
-            onClick={() => setImagePreview(null)}
-            className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg transition-colors"
-            style={{ background: "var(--nx-danger)" }}
-            title="Remove image"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-          <div className="mt-1 text-xs flex items-center gap-1" style={{ color: "var(--nx-text-tertiary)" }}>
-            <ImageIcon className="w-3 h-3" aria-hidden="true" />
-            <span>Image ready to send</span>
-          </div>
-        </div>
+      {imageBase64 && (
+        <ImageAttachmentPreview
+          src={imageBase64}
+          onRemove={() => setImageBase64(null)}
+        />
       )}
 
       <div className="flex items-center gap-2">
-        {/* Plus button */}
         <Button
+          type="button"
           variant="ghost"
           size="icon"
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="shrink-0 rounded-full h-10 w-10 transition-all duration-200"
-          style={{ color: "var(--nx-text-tertiary)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "var(--nx-accent-400)";
-            e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--nx-text-tertiary)";
-            e.currentTarget.style.background = "transparent";
-          }}
           title="Send image"
+          onClick={() => fileInputRef.current?.click()}
+          className="shrink-0 rounded-full h-10 w-10 cursor-pointer hover:text-[var(--nx-accent-400)]"
+          style={{ color: "var(--nx-text-tertiary)" }}
         >
           <Plus className="w-5 h-5" />
         </Button>
@@ -180,22 +106,22 @@ export function MessageInput({ onSend, isTyping, typingUser, onTypingChange }: M
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          onChange={handleImageSelect}
+          onChange={handlePickImage}
           className="hidden"
         />
 
-        {/* Input field */}
         <div className="flex-1 relative">
           <Input
-            value={message}
-            onChange={(e) => {
-              const nextValue = e.target.value;
-              setMessage(nextValue);
-              startTyping(nextValue);
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              handleInputChange(event.target.value);
             }}
             onKeyDown={handleKeyDown}
             onBlur={stopTyping}
-            placeholder={imagePreview ? "Add caption (optional)..." : "Message..."}
+            placeholder={
+              imageBase64 ? "Add caption (optional)..." : "Message..."
+            }
             className="pr-20 pl-4 py-6 text-white placeholder:text-zinc-600 rounded-2xl"
             style={{
               background: "var(--nx-surface-3)",
@@ -204,40 +130,36 @@ export function MessageInput({ onSend, isTyping, typingUser, onTypingChange }: M
           />
 
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-            <EmojiPickerButton onEmojiSelect={handleEmojiSelect} />
+            <EmojiPickerButton
+              onEmojiSelect={(emoji) => setText((prev) => prev + emoji)}
+            />
 
+            {/* Nút ghi âm mới chỉ là giao diện, chưa có chức năng. */}
             <Button
+              type="button"
               variant="ghost"
               size="icon"
-              className="rounded-full h-8 w-8 transition-all duration-200"
+              title="Voice message (coming soon)"
+              disabled
+              className="rounded-full h-8 w-8"
               style={{ color: "var(--nx-text-tertiary)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "white";
-                e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--nx-text-tertiary)";
-                e.currentTarget.style.background = "transparent";
-              }}
-              title="Voice message"
             >
               <Mic className="w-5 h-5" />
             </Button>
           </div>
         </div>
 
-        {/* Send button */}
         <Button
           onClick={handleSend}
           disabled={!canSend}
-          className="shrink-0 text-white rounded-full h-11 w-11 p-0 transition-all duration-300 border-0 disabled:opacity-30 cursor-pointer"
+          title="Send message"
+          className="shrink-0 text-white rounded-full h-11 w-11 p-0 border-0 disabled:opacity-30 cursor-pointer transition-all duration-300"
           style={{
             background: canSend
               ? "linear-gradient(135deg, var(--nx-accent-500), var(--nx-violet-500))"
               : "var(--nx-surface-4)",
             boxShadow: canSend ? "0 0 20px rgba(99, 102, 241, 0.35)" : "none",
           }}
-          title="Send message"
         >
           <Send className="w-5 h-5" />
         </Button>

@@ -1,98 +1,144 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Realtime Chat - Backend (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend cho ứng dụng chat realtime: đăng ký / đăng nhập bằng JWT, nhắn tin 1-1,
+báo "đang gõ", trạng thái online và đã xem.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- REST API: dùng cho các việc không cần realtime (đăng nhập, tải lịch sử tin nhắn...).
+- WebSocket (Socket.IO): dùng cho những việc cần hiện ngay lập tức (tin nhắn mới,
+  đang gõ, online/offline).
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## 1. Chạy thử
 
 ```bash
-$ npm install
+npm install
+npm run start:dev     # có hot reload
 ```
 
-## Compile and run the project
+Tạo file `.env` ở thư mục gốc của backend:
+
+```env
+MONGODB_URL=mongodb://localhost:27017/realtime-chat
+PORT=5000
+JWT_ACCESS_KEY=doi-thanh-chuoi-bi-mat-cua-ban
+FRONTEND_URL=http://localhost:3000
+```
+
+Kiểm tra server đã sống chưa: mở `http://localhost:5000/api/health`.
+
+> **Nếu database đã có dữ liệu từ trước**, hãy chạy một lần:
+>
+> ```bash
+> npm run migrate:object-ids
+> ```
+>
+> Schema cũ khai báo khoá ngoại bằng `Types.ObjectId`, bị @nestjs/mongoose hiểu thành
+> kiểu `Mixed` nên `conversationId` / `senderId` / `lastMessage` bị lưu dưới dạng
+> chuỗi (khiến `unreadCount` luôn bằng 0). Schema đã được sửa, script trên đổi nốt
+> dữ liệu cũ sang ObjectId. Nhớ backup database trước khi chạy.
+
+## 2. Cấu trúc thư mục
+
+Mỗi thư mục trong `src/` là một **module** của NestJS. Một module thường có đủ 4 phần:
+
+| Tệp | Vai trò |
+| --- | --- |
+| `*.module.ts` | Khai báo module có gì, import gì, export gì cho module khác dùng |
+| `*.controller.ts` | Nhận request HTTP, không chứa logic, chỉ gọi xuống service |
+| `*.service.ts` | Logic nghiệp vụ + truy vấn database |
+| `schemas/*.ts` | Mô tả cấu trúc collection trong MongoDB (Mongoose) |
+| `dto/*.ts` | Mô tả + kiểm tra dữ liệu client gửi lên |
+
+```
+src/
+├── main.ts                 # khởi động app: CORS, prefix /api, ValidationPipe
+├── app.module.ts           # module gốc, gom tất cả module con
+├── app.controller.ts       # GET /api/health
+├── auth/                   # đăng ký, đăng nhập, JWT
+│   ├── auth.constants.ts   # khoá bí mật + thời hạn token (dùng chung 1 chỗ)
+│   ├── decorators/         # @CurrentUser() - lấy user đang đăng nhập
+│   ├── guards/             # JwtAuthGuard - chặn request không có token
+│   └── strategies/         # JwtStrategy - kiểm tra token hợp lệ
+├── users/                  # người dùng
+├── conversations/          # cuộc trò chuyện giữa 2 người
+├── messages/               # tin nhắn
+└── chat/                   # WebSocket
+    ├── chat.gateway.ts     # "controller" của WebSocket
+    ├── chat.types.ts       # kiểu dữ liệu của các sự kiện socket
+    └── presence.service.ts # ghi nhớ ai đang online
+```
+
+Luồng của một request HTTP:
+
+```
+Client -> Guard (nếu có) -> ValidationPipe (kiểm tra DTO) -> Controller -> Service -> MongoDB
+```
+
+## 3. REST API
+
+Tất cả đều bắt đầu bằng `/api`.
+
+| Method | Đường dẫn | Ghi chú |
+| --- | --- | --- |
+| GET | `/health` | kiểm tra server |
+| POST | `/auth/signup` | `{ name?, email, password }` -> trả về `access_token` |
+| POST | `/auth/login` | `{ email, password }` -> trả về `access_token` |
+| GET | `/auth/profile` | cần header `Authorization: Bearer <token>` |
+| GET | `/users` | danh sách người dùng |
+| GET | `/users/:id` | |
+| PATCH | `/users/:id` | `{ name?, avatar? }` |
+| PATCH | `/users/:id/avatar` | `{ avatar }` (ảnh base64) |
+| DELETE | `/users/:id` | |
+| GET | `/conversations?userId=` | kèm `unreadCount` của từng cuộc trò chuyện |
+| POST | `/conversations` | `{ userId, participantId }` - có rồi thì trả về, chưa có thì tạo |
+| GET | `/conversations/:id` | |
+| DELETE | `/conversations/:id` | |
+| GET | `/messages/conversation/:conversationId` | lịch sử tin nhắn |
+| GET | `/messages/:id` | |
+| PATCH | `/messages/:id` | cần token, chỉ sửa được tin của mình |
+| DELETE | `/messages/:id` | cần token, chỉ xoá được tin của mình |
+
+## 4. Sự kiện WebSocket
+
+Client gửi lên:
+
+| Sự kiện | Dữ liệu |
+| --- | --- |
+| `presence:online` | `{ userId }` |
+| `joinConversation` | `{ conversationId }` |
+| `sendMessage` | `{ conversationId, senderId, content?, type?, imageUrl? }` |
+| `updateMessage` | `{ conversationId, messageId, senderId, content }` |
+| `deleteMessage` | `{ conversationId, messageId, senderId }` |
+| `typing` | `{ conversationId, userId, isTyping }` |
+| `markAsRead` | `{ conversationId, userId }` |
+
+Server gửi xuống:
+
+| Sự kiện | Dữ liệu |
+| --- | --- |
+| `presence:update` | `{ userId, online }` |
+| `presence:list` | `{ onlineUserIds }` |
+| `newMessage` | tin nhắn vừa tạo |
+| `messageUpdated` | tin nhắn sau khi sửa |
+| `messageDeleted` | `{ messageId }` |
+| `userTyping` | `{ conversationId, userId, isTyping }` |
+| `messagesRead` | `{ conversationId, userId, messageIds }` |
+
+## 5. Lệnh hay dùng
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run start:dev    # chạy dev, tự nạp lại code
+npm run build        # build ra thư mục dist/
+npm run start:prod   # chạy bản đã build
+npm run lint         # kiểm tra + tự sửa lỗi code style
+npm test             # chạy unit test
+npm run test:e2e     # chạy test e2e (cần MongoDB)
 ```
 
-## Run tests
+## 6. Điểm cần làm thêm nếu đưa lên production
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Socket đang tin tưởng `senderId` / `userId` do client gửi lên; nên xác thực JWT
+  ngay khi socket kết nối rồi lấy id từ token.
+- Các route `GET /users`, `/conversations`, `/messages/...` chưa yêu cầu đăng nhập.
+- `PresenceService` lưu trong RAM nên chỉ đúng khi chạy 1 server; chạy nhiều server
+  thì cần chuyển sang Redis.
+- Ảnh đang lưu base64 ngay trong MongoDB; nên đổi sang lưu file/CDN.

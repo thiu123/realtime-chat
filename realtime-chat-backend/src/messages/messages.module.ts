@@ -1,14 +1,16 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { MessagesService } from './messages.service';
+
+import { AuthModule } from '../auth/auth.module';
 import { MessagesController } from './messages.controller';
+import { MessagesService } from './messages.service';
 import { Message, MessageSchema } from './schemas/message.schema';
-import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Message.name, schema: MessageSchema }]),
-    ConversationsModule,
+    // AuthModule cung cấp JwtStrategy để JwtAuthGuard hoạt động ở controller này.
+    AuthModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

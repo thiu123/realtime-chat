@@ -1,25 +1,30 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { JwtStrategy } from './strategies/jwt.strategy';
+
 import { UsersModule } from '../users/users.module';
+import {
+  JWT_EXPIRES_IN,
+  JWT_FALLBACK_SECRET,
+  JWT_SECRET_ENV_KEY,
+} from './auth.constants';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
-    UsersModule,
+    UsersModule, // để dùng UsersService
     PassportModule,
+
+    // Cấu hình nơi KÝ token. Khoá bí mật phải trùng với JwtStrategy.
     JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret:
-          configService.get<string>('JWT_SECRET') ||
-          'your-secret-key-change-in-production',
-        signOptions: { expiresIn: '7d' },
-      }),
       inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>(JWT_SECRET_ENV_KEY) ?? JWT_FALLBACK_SECRET,
+        signOptions: { expiresIn: JWT_EXPIRES_IN },
+      }),
     }),
   ],
   controllers: [AuthController],

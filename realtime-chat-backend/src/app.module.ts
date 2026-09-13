@@ -2,36 +2,38 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
-import { UsersModule } from './users/users.module';
+import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
-import { ChatModule } from './chat/chat.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { UsersModule } from './users/users.module';
 
+/**
+ * Module gốc của ứng dụng.
+ * NestJS tổ chức code thành cây module: AppModule gom tất cả module con lại.
+ */
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
+    // Đọc file .env. isGlobal: true -> mọi module đều inject được ConfigService.
+    ConfigModule.forRoot({ isGlobal: true }),
 
+    // Kết nối MongoDB. Dùng forRootAsync vì cần ConfigService đọc .env xong trước.
     MongooseModule.forRootAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      useFactory: (config: ConfigService) => ({
         uri:
-          configService.get<string>('MONGODB_URL') ||
+          config.get<string>('MONGODB_URL') ??
           'mongodb://localhost:27017/realtime-chat',
       }),
     }),
-    UsersModule,
-    AuthModule,
-    ConversationsModule,
-    MessagesModule,
-    ChatModule,
+
+    UsersModule, // CRUD người dùng
+    AuthModule, // đăng ký / đăng nhập / xác thực bằng JWT
+    ConversationsModule, // cuộc trò chuyện giữa 2 người
+    MessagesModule, // tin nhắn trong cuộc trò chuyện
+    ChatModule, // WebSocket: gửi/nhận tin nhắn realtime
   ],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

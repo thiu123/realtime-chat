@@ -1,49 +1,63 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, UserPlus, PenSquare } from "lucide-react";
+
+import { PenSquare, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useChatStore } from "@/stores/chat.store";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useChatStore } from "@/stores/chat.store";
 
 interface ContactsModalProps {
+  /** Gọi khi chọn một người để bắt đầu trò chuyện. */
   onSelectUser: (userId: string) => void;
 }
 
+/** Nút bút chì ở sidebar: mở hộp thoại chọn người để nhắn tin. */
 export function ContactsModal({ onSelectUser }: ContactsModalProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
   const users = useChatStore((state) => state.users);
 
-  useEffect(() => {
-    if (open) setSearch("");
-  }, [open]);
+  // Mỗi lần mở lại thì xoá ô tìm kiếm cũ.
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) setKeyword("");
+  };
 
-  const filteredUsers = users.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = useMemo(() => {
+    const normalized = keyword.trim().toLowerCase();
+    if (!normalized) return users;
+
+    return users.filter(
+      (user) =>
+        user.name.toLowerCase().includes(normalized) ||
+        user.email.toLowerCase().includes(normalized),
+    );
+  }, [users, keyword]);
 
   const handleSelect = (userId: string) => {
     onSelectUser(userId);
-    setOpen(false);
+    setIsOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button
-          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200 cursor-pointer"
-          style={{ background: "var(--nx-surface-3)", color: "var(--nx-text-primary)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--nx-surface-4)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--nx-surface-3)";
-          }}
           title="New message"
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200 cursor-pointer"
+          style={{
+            background: "var(--nx-surface-3)",
+            color: "var(--nx-text-primary)",
+          }}
         >
           <PenSquare className="w-4 h-4" />
         </button>
@@ -54,7 +68,6 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
         style={{
           background: "var(--nx-surface-4)",
           border: "1px solid var(--nx-glass-border-bright)",
-          boxShadow: "0 0 60px rgba(99, 102, 241, 0.1), 0 25px 50px rgba(0, 0, 0, 0.5)",
         }}
       >
         <DialogHeader
@@ -64,19 +77,27 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
             borderBottom: "1px solid var(--nx-glass-border)",
           }}
         >
-          <DialogTitle className="text-lg font-semibold tracking-tight">New Chat</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-tight">
+            New Chat
+          </DialogTitle>
           <p className="text-sm mt-1" style={{ color: "var(--nx-text-tertiary)" }}>
             Select a user to start chatting
           </p>
         </DialogHeader>
 
-        <div className="p-4" style={{ borderBottom: "1px solid var(--nx-glass-border)" }}>
+        <div
+          className="p-4"
+          style={{ borderBottom: "1px solid var(--nx-glass-border)" }}
+        >
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--nx-text-ghost)" }} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+              style={{ color: "var(--nx-text-ghost)" }}
+            />
             <Input
               placeholder="Search users..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
               className="pl-9 text-white placeholder:text-zinc-600 rounded-xl"
               style={{
                 background: "var(--nx-surface-3)",
@@ -88,7 +109,7 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
 
         <ScrollArea className="max-h-[300px] min-h-[200px] p-2">
           {filteredUsers.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center p-8 space-y-3">
+            <div className="flex flex-col items-center justify-center p-8 gap-3">
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center"
                 style={{
@@ -96,9 +117,14 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
                   background: "var(--nx-glass-bg)",
                 }}
               >
-                <Search className="w-5 h-5" style={{ color: "var(--nx-text-ghost)" }} />
+                <Search
+                  className="w-5 h-5"
+                  style={{ color: "var(--nx-text-ghost)" }}
+                />
               </div>
-              <p className="text-sm" style={{ color: "var(--nx-text-ghost)" }}>No users found</p>
+              <p className="text-sm" style={{ color: "var(--nx-text-ghost)" }}>
+                No users found
+              </p>
             </div>
           ) : (
             <div className="flex flex-col gap-1 p-2">
@@ -106,29 +132,32 @@ export function ContactsModal({ onSelectUser }: ContactsModalProps) {
                 <button
                   key={user._id}
                   onClick={() => handleSelect(user._id)}
-                  className="flex items-center gap-3 p-3 rounded-xl transition-all duration-200 w-full text-left"
-                  style={{ background: "transparent" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--nx-glass-bg-hover)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                  }}
+                  className="flex items-center gap-3 p-3 rounded-xl w-full text-left transition-colors duration-200 cursor-pointer hover:bg-white/5"
                 >
-                  <Avatar className="w-10 h-10 ring-2" style={{ ["--tw-ring-color" as string]: "var(--nx-glass-border)" }}>
+                  <Avatar className="w-10 h-10">
                     <AvatarImage src={user.avatar || undefined} />
                     <AvatarFallback
                       className="text-white font-medium text-xs"
-                      style={{ background: "linear-gradient(135deg, var(--nx-accent-600), var(--nx-violet-500))" }}
+                      style={{
+                        background:
+                          "linear-gradient(135deg, var(--nx-accent-600), var(--nx-violet-500))",
+                      }}
                     >
                       {user.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
+
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate text-sm" style={{ color: "var(--nx-text-primary)" }}>
+                    <h3
+                      className="font-medium truncate text-sm"
+                      style={{ color: "var(--nx-text-primary)" }}
+                    >
                       {user.name}
                     </h3>
-                    <p className="text-xs truncate mt-0.5" style={{ color: "var(--nx-text-ghost)" }}>
+                    <p
+                      className="text-xs truncate mt-0.5"
+                      style={{ color: "var(--nx-text-ghost)" }}
+                    >
                       {user.email}
                     </p>
                   </div>

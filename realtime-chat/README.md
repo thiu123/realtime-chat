@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Realtime Chat - Frontend (Next.js)
 
-## Getting Started
+Giao diện chat realtime: đăng nhập/đăng ký, nhắn tin 1-1, gửi ảnh, emoji,
+báo "đang gõ", chấm xanh online và dấu tích đã xem.
 
-First, run the development server:
+Cần chạy backend (`../realtime-chat-backend`) trước.
+
+## 1. Chạy thử
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+File `.env.local`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 2. Cấu trúc thư mục
 
-## Learn More
+```
+src/
+├── app/                     # route của Next.js (App Router)
+│   ├── page.tsx             # màn hình chat, chỉ còn phần bố cục 3 cột
+│   ├── login/page.tsx
+│   └── signup/page.tsx
+├── components/
+│   ├── auth/                # các mảnh dùng chung của 2 trang login & signup
+│   │   ├── AuthLayout.tsx   # khung 2 cột (giới thiệu | form)
+│   │   ├── TextField.tsx    # ô nhập có icon
+│   │   ├── PasswordField.tsx
+│   │   ├── SubmitButton.tsx
+│   │   ├── SocialAuthButtons.tsx
+│   │   ├── TermsCheckbox.tsx
+│   │   └── FormError.tsx
+│   ├── chat/                # các thành phần của màn hình chat
+│   └── ui/                  # component shadcn/ui (chỉ giữ cái đang dùng)
+├── hooks/
+│   ├── useChatSocket.ts     # nghe sự kiện WebSocket -> đổ vào store
+│   ├── useChatData.ts       # gọi REST API -> đổ vào store
+│   ├── useChatActions.ts    # gửi/sửa/xoá tin, báo đang gõ
+│   ├── useRequireAuth.ts    # chặn trang khi chưa đăng nhập
+│   ├── useAvatarUpload.ts
+│   └── useTypingNotifier.ts
+├── lib/
+│   ├── axios.ts             # axios instance, tự gắn Bearer token
+│   ├── chat-mappers.ts      # đổi dữ liệu API -> dữ liệu cho UI
+│   ├── errors.ts            # lấy thông báo lỗi từ response của NestJS
+│   └── utils.ts
+├── services/
+│   ├── auth.service.ts      # POST /auth/login, /auth/signup
+│   ├── chat.service.ts      # các API users / conversations / messages
+│   └── socket.service.ts    # bọc socket.io-client, gom tên sự kiện một chỗ
+├── stores/
+│   ├── auth.store.ts        # user + token (lưu localStorage)
+│   └── chat.store.ts        # conversations, messages, ai đang online
+└── types/
+    ├── api.ts               # đúng như backend trả về (_id, senderId...)
+    └── chat.ts              # dạng đã gọn cho UI (id, user, timestamp...)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 3. Dữ liệu chảy như thế nào
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+REST API  --useChatData-->  chat.store  -->  component
+WebSocket --useChatSocket-->    ^
+component --useChatActions--> WebSocket --> backend
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **services/** chỉ biết gọi API, không biết gì về React.
+- **hooks/** nối services với store.
+- **components/** chỉ đọc store và vẽ giao diện.
 
-## Deploy on Vercel
+Nhờ vậy `app/page.tsx` chỉ còn ~85 dòng bố cục, không còn chứa logic socket.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 4. Lệnh hay dùng
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev     # chạy dev (http://localhost:3000)
+npm run build   # build production
+npm start       # chạy bản đã build
+npm run lint    # kiểm tra code style
+```
+
+## 5. Phần còn là giao diện mẫu
+
+Những chỗ này chưa có backend, đang để `disabled` hoặc dùng dữ liệu mẫu:
+
+- Đăng nhập bằng Google / GitHub (`components/auth/SocialAuthButtons.tsx`)
+- Nút gọi điện / gọi video / tìm trong hội thoại (`components/chat/ChatHeader.tsx`)
+- Nút ghi âm trong ô nhập tin (`components/chat/MessageInput.tsx`)
+- Danh sách file đã gửi (`components/chat/SharedFilesSection.tsx`)
+
+## 6. Thêm lại component shadcn/ui
+
+Các component không dùng đã bị xoá cho gọn. Cần cái nào thì cài lại:
+
+```bash
+npx shadcn@latest add <tên-component>
+```
