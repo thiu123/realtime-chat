@@ -80,10 +80,7 @@ export function useChatData() {
 
         // Mở ra là coi như đã đọc.
         store.markConversationRead(activeConversationId);
-        chatSocket.markAsRead({
-          conversationId: activeConversationId,
-          userId: currentUserId,
-        });
+        chatSocket.markAsRead({ conversationId: activeConversationId });
       } catch (error) {
         console.error("Không tải được tin nhắn:", error);
       }

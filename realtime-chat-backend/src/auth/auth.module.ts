@@ -29,6 +29,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  // Export luôn JwtModule để ChatGateway xác thực token WebSocket bằng đúng
+  // khoá bí mật đã dùng để ký, khỏi phải cấu hình lại lần thứ hai.
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

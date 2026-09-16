@@ -27,7 +27,6 @@ export function useChatActions() {
 
       chatSocket.sendMessage({
         conversationId: activeConversationId,
-        senderId: currentUserId,
         content,
         type,
         imageUrl,
@@ -40,12 +39,7 @@ export function useChatActions() {
     (messageId: string, content: string) => {
       if (!currentUserId || !activeConversationId) return;
 
-      chatSocket.updateMessage({
-        conversationId: activeConversationId,
-        messageId,
-        senderId: currentUserId,
-        content,
-      });
+      chatSocket.updateMessage({ messageId, content });
     },
     [currentUserId, activeConversationId],
   );
@@ -54,11 +48,7 @@ export function useChatActions() {
     (messageId: string) => {
       if (!currentUserId || !activeConversationId) return;
 
-      chatSocket.deleteMessage({
-        conversationId: activeConversationId,
-        messageId,
-        senderId: currentUserId,
-      });
+      chatSocket.deleteMessage({ messageId });
     },
     [currentUserId, activeConversationId],
   );
@@ -67,11 +57,7 @@ export function useChatActions() {
     (isTyping: boolean) => {
       if (!currentUserId || !activeConversationId) return;
 
-      chatSocket.setTyping({
-        conversationId: activeConversationId,
-        userId: currentUserId,
-        isTyping,
-      });
+      chatSocket.setTyping({ conversationId: activeConversationId, isTyping });
     },
     [currentUserId, activeConversationId],
   );

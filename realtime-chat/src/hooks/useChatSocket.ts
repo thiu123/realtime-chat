@@ -19,6 +19,8 @@ import type { ApiMessage } from "@/types/api";
  */
 export function useChatSocket() {
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
   const activeConversationId = useChatStore(
     (state) => state.activeConversationId,
   );
@@ -37,7 +39,8 @@ export function useChatSocket() {
       : undefined;
 
   useEffect(() => {
-    if (!currentUserId) return;
+    // Không có token thì khỏi mở socket: server sẽ từ chối ngay ở handshake.
+    if (!currentUserId || !accessToken) return;
 
     // Các hàm dưới đây lấy state mới nhất bằng getState() thay vì đọc biến
     // trong closure, vì listener chỉ được đăng ký một lần.
@@ -73,10 +76,7 @@ export function useChatSocket() {
         // Đang mở đoạn chat thì coi như đọc luôn tin vừa tới.
         if (getSenderId(message) !== currentUserId) {
           store().markConversationRead(activeId);
-          chatSocket.markAsRead({
-            conversationId: activeId,
-            userId: currentUserId,
-          });
+          chatSocket.markAsRead({ conversationId: activeId });
         }
       }
 
@@ -86,7 +86,7 @@ export function useChatSocket() {
       });
     };
 
-    chatSocket.connect();
+    chatSocket.connect(accessToken);
 
     // Mỗi hàm on() trả về hàm huỷ đăng ký, gom lại để cleanup một lượt.
     const unsubscribes = [
@@ -138,24 +138,33 @@ export function useChatSocket() {
         }
       }),
 
-      // Báo online lại mỗi khi socket kết nối lại (ví dụ sau khi rớt mạng).
-      chatSocket.onConnect(() => chatSocket.announceOnline(currentUserId)),
+      // Server từ chối token ngay ở handshake -> phải đăng nhập lại.
+      // Rớt mạng thì willRetry = true, socket.io tự nối lại nên bỏ qua.
+      chatSocket.onConnectError((error, willRetry) => {
+        if (willRetry) return;
+
+        console.error("WebSocket bị từ chối:", error.message);
+        clearAuth();
+      }),
+
+      // Xin lại danh sách online mỗi khi socket nối lại (ví dụ sau khi rớt mạng).
+      chatSocket.onConnect(() => chatSocket.announceOnline()),
     ];
 
-    chatSocket.announceOnline(currentUserId);
+    chatSocket.announceOnline();
 
     return () => {
       unsubscribes.forEach((unsubscribe) => unsubscribe());
       chatSocket.disconnect();
     };
-  }, [currentUserId]);
+  }, [currentUserId, accessToken, clearAuth]);
 
   // Danh sách user tải xong sau khi socket đã nối thì báo online lại,
   // để những người đang mở app thấy mình sáng đèn ngay.
   useEffect(() => {
     if (!currentUserId || !usersLoaded) return;
 
-    chatSocket.announceOnline(currentUserId);
+    chatSocket.announceOnline();
   }, [currentUserId, usersLoaded]);
 
   return { typingUser };

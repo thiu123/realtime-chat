@@ -76,11 +76,19 @@ type ServerEventName = keyof ServerEventPayloads & string;
 class ChatSocket {
   private socket: Socket | null = null;
 
-  /** Mở kết nối. Gọi nhiều lần cũng chỉ tạo một socket duy nhất. */
-  connect() {
+  /**
+   * Mở kết nối. Gọi nhiều lần cũng chỉ tạo một socket duy nhất.
+   *
+   * Token đi kèm ngay trong handshake: server xác thực một lần lúc kết nối rồi
+   * nhớ userId cho cả phiên, nên các emit bên dưới không cần gửi id nữa.
+   */
+  connect(token: string) {
     if (this.socket) return;
 
-    this.socket = io(SOCKET_URL, { transports: ["websocket"] });
+    this.socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+      auth: { token },
+    });
   }
 
   disconnect() {
@@ -117,11 +125,30 @@ class ChatSocket {
     };
   }
 
+  /**
+   * Lắng nghe lúc không kết nối được.
+   *
+   * `willRetry` phân biệt hai tình huống rất khác nhau:
+   * - true: server chưa lên / mất mạng -> socket.io tự thử lại, không cần làm gì.
+   * - false: server từ chối ngay ở handshake (token sai/hết hạn) -> phải đăng nhập lại.
+   */
+  onConnectError(handler: (error: Error, willRetry: boolean) => void) {
+    const listener = (error: Error) => {
+      handler(error, this.socket?.active ?? false);
+    };
+
+    this.socket?.on("connect_error", listener);
+
+    return () => {
+      this.socket?.off("connect_error", listener);
+    };
+  }
+
   // --- Các việc client gửi lên server -----------------------------------
 
-  /** Báo mình vừa online (để mọi người thấy chấm xanh). */
-  announceOnline(userId: string) {
-    this.emit(SOCKET_EVENTS.presenceOnline, { userId });
+  /** Xin lại danh sách người đang online (server tự biết mình là ai). */
+  announceOnline() {
+    this.emit(SOCKET_EVENTS.presenceOnline);
   }
 
   /** Vào "phòng" của một cuộc trò chuyện để nhận sự kiện của riêng phòng đó. */
@@ -131,7 +158,6 @@ class ChatSocket {
 
   sendMessage(payload: {
     conversationId: string;
-    senderId: string;
     content: string;
     type: MessageType;
     imageUrl?: string;
@@ -139,36 +165,23 @@ class ChatSocket {
     this.emit(SOCKET_EVENTS.sendMessage, payload);
   }
 
-  updateMessage(payload: {
-    conversationId: string;
-    messageId: string;
-    senderId: string;
-    content: string;
-  }) {
+  updateMessage(payload: { messageId: string; content: string }) {
     this.emit(SOCKET_EVENTS.updateMessage, payload);
   }
 
-  deleteMessage(payload: {
-    conversationId: string;
-    messageId: string;
-    senderId: string;
-  }) {
+  deleteMessage(payload: { messageId: string }) {
     this.emit(SOCKET_EVENTS.deleteMessage, payload);
   }
 
-  setTyping(payload: {
-    conversationId: string;
-    userId: string;
-    isTyping: boolean;
-  }) {
+  setTyping(payload: { conversationId: string; isTyping: boolean }) {
     this.emit(SOCKET_EVENTS.typing, payload);
   }
 
-  markAsRead(payload: { conversationId: string; userId: string }) {
+  markAsRead(payload: { conversationId: string }) {
     this.emit(SOCKET_EVENTS.markAsRead, payload);
   }
 
-  private emit(event: string, payload: unknown) {
+  private emit(event: string, payload?: unknown) {
     this.socket?.emit(event, payload);
   }
 }

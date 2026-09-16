@@ -68,9 +68,13 @@ export class MessagesService {
   /** Xoá tin nhắn. Chỉ người gửi mới có quyền xoá. */
   async remove(messageId: string, senderId: string) {
     const message = await this.findOwnedMessage(messageId, senderId);
+
+    // Lấy conversationId TRƯỚC khi xoá, để ChatGateway biết phải báo vào phòng nào
+    // mà không phải tin conversationId do client gửi lên.
+    const conversationId = message.conversationId.toString();
     await message.deleteOne();
 
-    return { message: 'Đã xoá tin nhắn', messageId };
+    return { message: 'Đã xoá tin nhắn', messageId, conversationId };
   }
 
   /**

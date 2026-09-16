@@ -4,24 +4,27 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
 
 import { ConversationsService } from '../conversations/conversations.service';
+import { ConversationDocument } from '../conversations/schemas/conversation.schema';
 import { MessagesService } from '../messages/messages.service';
-import {
+import type {
+  ChatServer,
+  ChatSocket,
   DeleteMessagePayload,
   JoinConversationPayload,
   MarkAsReadPayload,
-  PresenceOnlinePayload,
   SendMessagePayload,
   TypingPayload,
   UpdateMessagePayload,
 } from './chat.types';
 import { PresenceService } from './presence.service';
+import { WsAuthService } from './ws-auth.service';
 
 /**
  * Gateway = "controller" của WebSocket.
@@ -35,16 +38,19 @@ import { PresenceService } from './presence.service';
  * - room theo user (tên = "user:<userId>"): tất cả tab của một người, kể cả khi họ
  *   đang xem đoạn chat khác -> dùng để báo có tin nhắn mới ngoài sidebar.
  *
- * Lưu ý (bản rút gọn cho người mới học): server đang tin tưởng `senderId` / `userId`
- * do client gửi lên. Ứng dụng thật nên xác thực JWT ngay khi socket kết nối.
+ * XÁC THỰC: token được kiểm tra MỘT lần ở middleware lúc handshake, sau đó
+ * userId nằm trong `client.data.userId`. Mọi handler đều lấy danh tính từ đó,
+ * KHÔNG BAO GIỜ từ payload - client gửi gì lên cũng chỉ là dữ liệu.
  */
 @WebSocketGateway({
   cors: { origin: '*' }, // khi deploy nên ghi rõ domain của frontend
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   /** Server của Socket.IO, dùng để gửi sự kiện cho client. */
   @WebSocketServer()
-  server!: Server;
+  server!: ChatServer;
 
   private readonly logger = new Logger(ChatGateway.name);
 
@@ -52,22 +58,75 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly presenceService: PresenceService,
+    private readonly wsAuthService: WsAuthService,
   ) {}
 
   // --------------------------------------------------------------------------
   // Kết nối / ngắt kết nối
   // --------------------------------------------------------------------------
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Socket kết nối: ${client.id}`);
+  /**
+   * Cửa duy nhất để vào hệ thống realtime.
+   *
+   * Đặt ở middleware chứ không ở handleConnection vì middleware chạy TRƯỚC khi
+   * kết nối được thiết lập: token sai thì client không bao giờ "connect" được,
+   * và không có khe thời gian nào để gửi sự kiện khi chưa xác thực xong.
+   */
+  afterInit(server: ChatServer) {
+    server.use((socket, next) => {
+      this.wsAuthService
+        .authenticate(socket)
+        .then((userId) => {
+          if (!userId) {
+            // Client nhận lỗi này ở sự kiện 'connect_error' và KHÔNG tự thử lại.
+            next(new Error('Token không hợp lệ hoặc đã hết hạn'));
+
+            return;
+          }
+
+          // Từ đây trở đi mọi handler đều đọc danh tính ở chỗ này.
+          socket.data.userId = userId;
+          next();
+        })
+        .catch((error: unknown) => {
+          this.logger.error(
+            `Lỗi khi xác thực socket: ${error instanceof Error ? error.message : 'không rõ'}`,
+          );
+          next(new Error('Xác thực thất bại'));
+        });
+    });
   }
 
-  handleDisconnect(client: Socket) {
+  async handleConnection(client: ChatSocket) {
+    const userId = this.getUserId(client);
+    if (!userId) {
+      // Middleware đã chặn hết rồi; nhánh này chỉ để chắc chắn.
+      client.disconnect(true);
+
+      return;
+    }
+
+    this.logger.log(`Socket kết nối: ${client.id} (user ${userId})`);
+
+    // Vào room riêng của user để nhận tin nhắn mới kể cả khi đang xem đoạn chat khác.
+    await client.join(this.getUserRoom(userId));
+    this.presenceService.addSocket(userId, client.id);
+
+    // Báo cho tất cả mọi người biết user này vừa online...
+    this.server.emit('presence:update', { userId, online: true });
+
+    // ...và gửi riêng cho người vừa vào danh sách những ai đang online.
+    client.emit('presence:list', {
+      onlineUserIds: this.presenceService.getOnlineUserIds(),
+    });
+  }
+
+  handleDisconnect(client: ChatSocket) {
     this.logger.log(`Socket ngắt kết nối: ${client.id}`);
 
     const result = this.presenceService.removeSocket(client.id);
     if (!result) {
-      return; // socket này chưa gắn với user nào
+      return; // socket bị từ chối lúc handshake, chưa gắn với user nào
     }
 
     // Báo cho mọi người: user vừa đóng một tab.
@@ -82,24 +141,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Trạng thái online
   // --------------------------------------------------------------------------
 
-  /** Client gửi ngay sau khi đăng nhập: { userId }. */
+  /**
+   * Xin lại danh sách người đang online.
+   *
+   * Việc đánh dấu online đã làm xong ở handleConnection; sự kiện này chỉ còn để
+   * client hỏi lại danh sách (ví dụ sau khi tải xong danh bạ). Không nhận payload:
+   * userId luôn là chủ của socket này.
+   */
   @SubscribeMessage('presence:online')
-  handlePresenceOnline(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: PresenceOnlinePayload,
-  ) {
-    const userId = payload?.userId;
-    if (!userId) {
-      return { status: 'error', message: 'Thiếu userId' };
+  handlePresenceOnline(@ConnectedSocket() client: ChatSocket) {
+    if (!this.getUserId(client)) {
+      return this.unauthorized();
     }
 
-    this.presenceService.addSocket(userId, client.id);
-    void client.join(this.getUserRoom(userId));
-
-    // Báo cho tất cả mọi người biết user này vừa online.
-    this.server.emit('presence:update', { userId, online: true });
-
-    // Riêng người vừa vào thì gửi luôn danh sách những ai đang online.
     client.emit('presence:list', {
       onlineUserIds: this.presenceService.getOnlineUserIds(),
     });
@@ -113,12 +167,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Vào room của một cuộc trò chuyện khi người dùng mở đoạn chat. */
   @SubscribeMessage('joinConversation')
-  handleJoinConversation(
-    @ConnectedSocket() client: Socket,
+  async handleJoinConversation(
+    @ConnectedSocket() client: ChatSocket,
     @MessageBody() payload: JoinConversationPayload,
   ) {
-    const { conversationId } = payload;
-    void client.join(conversationId);
+    const userId = this.getUserId(client);
+    if (!userId) {
+      return this.unauthorized();
+    }
+
+    const conversationId = payload?.conversationId;
+    if (!conversationId) {
+      return { status: 'error', message: 'Thiếu conversationId' };
+    }
+
+    // Không kiểm tra thì ai cũng vào được phòng của người khác và đọc lén
+    // toàn bộ tin nhắn realtime của họ.
+    const conversation = await this.findConversationFor(conversationId, userId);
+    if (!conversation) {
+      return {
+        status: 'error',
+        message: 'Không có quyền vào cuộc trò chuyện này',
+      };
+    }
+
+    await client.join(conversationId);
 
     this.logger.log(`Socket ${client.id} vào phòng ${conversationId}`);
 
@@ -127,28 +200,44 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Gửi tin nhắn mới. */
   @SubscribeMessage('sendMessage')
-  async handleSendMessage(@MessageBody() payload: SendMessagePayload) {
+  async handleSendMessage(
+    @ConnectedSocket() client: ChatSocket,
+    @MessageBody() payload: SendMessagePayload,
+  ) {
+    const senderId = this.getUserId(client);
+    if (!senderId) {
+      return this.unauthorized();
+    }
+
     try {
-      // 1. Lưu tin nhắn vào database.
-      const message = await this.messagesService.create(payload.senderId, {
+      // 1. Chỉ thành viên của cuộc trò chuyện mới được gửi vào đó.
+      const conversation = await this.findConversationFor(
+        payload.conversationId,
+        senderId,
+      );
+      if (!conversation) {
+        return {
+          status: 'error',
+          message: 'Không có quyền gửi vào cuộc trò chuyện này',
+        };
+      }
+
+      // 2. Lưu tin nhắn vào database; người gửi lấy từ token, không từ payload.
+      const message = await this.messagesService.create(senderId, {
         conversationId: payload.conversationId,
         content: payload.content ?? '',
         type: payload.type,
         imageUrl: payload.imageUrl,
       });
 
-      // 2. Cập nhật "tin nhắn cuối" để danh sách chat sắp xếp lại đúng thứ tự.
+      // 3. Cập nhật "tin nhắn cuối" để danh sách chat sắp xếp lại đúng thứ tự.
       await this.conversationsService.updateLastMessage(
         payload.conversationId,
         message._id.toString(),
       );
 
-      // 3. Gửi cho cả hai người, kể cả người đang xem đoạn chat khác.
-      await this.emitToParticipants(
-        payload.conversationId,
-        'newMessage',
-        message,
-      );
+      // 4. Gửi cho cả hai người, kể cả người đang xem đoạn chat khác.
+      this.emitToParticipants(conversation, 'newMessage', message);
 
       return { status: 'sent', message };
     } catch (error) {
@@ -158,16 +247,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Sửa nội dung tin nhắn. */
   @SubscribeMessage('updateMessage')
-  async handleUpdateMessage(@MessageBody() payload: UpdateMessagePayload) {
+  async handleUpdateMessage(
+    @ConnectedSocket() client: ChatSocket,
+    @MessageBody() payload: UpdateMessagePayload,
+  ) {
+    const senderId = this.getUserId(client);
+    if (!senderId) {
+      return this.unauthorized();
+    }
+
     try {
+      // MessagesService.update tự từ chối nếu tin nhắn không phải của senderId.
       const message = await this.messagesService.update(
         payload.messageId,
-        payload.senderId,
+        senderId,
         payload.content,
       );
 
-      // Chỉ người đang mở đoạn chat mới cần biết nội dung vừa đổi.
-      this.server.to(payload.conversationId).emit('messageUpdated', message);
+      // Phòng để gửi lấy từ chính tin nhắn, không lấy từ payload: nếu không,
+      // client có thể phát sự kiện vào phòng bất kỳ.
+      this.server
+        .to(message.conversationId.toString())
+        .emit('messageUpdated', message);
 
       return { status: 'updated', message };
     } catch (error) {
@@ -177,11 +278,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Xoá tin nhắn. */
   @SubscribeMessage('deleteMessage')
-  async handleDeleteMessage(@MessageBody() payload: DeleteMessagePayload) {
-    try {
-      await this.messagesService.remove(payload.messageId, payload.senderId);
+  async handleDeleteMessage(
+    @ConnectedSocket() client: ChatSocket,
+    @MessageBody() payload: DeleteMessagePayload,
+  ) {
+    const senderId = this.getUserId(client);
+    if (!senderId) {
+      return this.unauthorized();
+    }
 
-      this.server.to(payload.conversationId).emit('messageDeleted', {
+    try {
+      // remove() trả về conversationId của tin nhắn vừa xoá (nguồn đáng tin).
+      const { conversationId } = await this.messagesService.remove(
+        payload.messageId,
+        senderId,
+      );
+
+      this.server.to(conversationId).emit('messageDeleted', {
         messageId: payload.messageId,
       });
 
@@ -194,28 +307,59 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /** Báo đang gõ / ngừng gõ. */
   @SubscribeMessage('typing')
   handleTyping(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: ChatSocket,
     @MessageBody() payload: TypingPayload,
   ) {
+    const userId = this.getUserId(client);
+    if (!userId) {
+      return this.unauthorized();
+    }
+
+    // Sự kiện này bắn theo từng phím gõ nên không truy vấn database: chỉ cần
+    // socket đang ở trong phòng là đủ, mà muốn vào phòng thì đã phải qua
+    // kiểm tra thành viên ở joinConversation rồi.
+    if (!payload?.conversationId || !client.rooms.has(payload.conversationId)) {
+      return { status: 'error', message: 'Chưa vào cuộc trò chuyện này' };
+    }
+
     // client.to(...) gửi cho những người KHÁC trong phòng, không gửi lại cho chính mình.
     client.to(payload.conversationId).emit('userTyping', {
       conversationId: payload.conversationId,
-      userId: payload.userId,
+      userId,
       isTyping: payload.isTyping,
     });
+
+    return { status: 'ok' };
   }
 
   /** Đánh dấu đã đọc toàn bộ tin nhắn trong một cuộc trò chuyện. */
   @SubscribeMessage('markAsRead')
-  async handleMarkAsRead(@MessageBody() payload: MarkAsReadPayload) {
-    const conversationId = payload?.conversationId;
-    const userId = payload?.userId;
+  async handleMarkAsRead(
+    @ConnectedSocket() client: ChatSocket,
+    @MessageBody() payload: MarkAsReadPayload,
+  ) {
+    const userId = this.getUserId(client);
+    if (!userId) {
+      return this.unauthorized();
+    }
 
-    if (!conversationId || !userId) {
-      return { status: 'error', message: 'Thiếu conversationId hoặc userId' };
+    const conversationId = payload?.conversationId;
+    if (!conversationId) {
+      return { status: 'error', message: 'Thiếu conversationId' };
     }
 
     try {
+      const conversation = await this.findConversationFor(
+        conversationId,
+        userId,
+      );
+      if (!conversation) {
+        return {
+          status: 'error',
+          message: 'Không có quyền đọc cuộc trò chuyện này',
+        };
+      }
+
       const { messageIds } = await this.messagesService.markConversationAsRead(
         conversationId,
         userId,
@@ -240,6 +384,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Các hàm dùng chung
   // --------------------------------------------------------------------------
 
+  /** Danh tính của socket, do handleConnection đặt sau khi xác thực JWT. */
+  private getUserId(client: ChatSocket): string | null {
+    const userId = client.data?.userId;
+
+    return typeof userId === 'string' && userId.length > 0 ? userId : null;
+  }
+
+  /** Trả lời chung cho socket chưa xác thực (về lý thuyết không xảy ra). */
+  private unauthorized() {
+    return { status: 'error', message: 'Chưa xác thực' };
+  }
+
+  /**
+   * Lấy cuộc trò chuyện và kiểm tra `userId` có thật sự là thành viên hay không.
+   * Trả về null nếu không tồn tại HOẶC không phải thành viên - gộp hai trường hợp
+   * làm một để người ngoài không dò được id nào có tồn tại.
+   */
+  private async findConversationFor(conversationId: string, userId: string) {
+    const conversation =
+      await this.conversationsService.findById(conversationId);
+
+    if (!conversation) {
+      return null;
+    }
+
+    const isParticipant = conversation.participants.some(
+      (participant) => this.getParticipantId(participant) === userId,
+    );
+
+    return isParticipant ? conversation : null;
+  }
+
   /** Tên room riêng của một user (gom mọi tab của người đó). */
   private getUserRoom(userId: string) {
     return `user:${userId}`;
@@ -249,23 +425,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Gửi sự kiện tới TẤT CẢ thành viên của cuộc trò chuyện, kể cả người đang
    * không mở đoạn chat đó (nhờ room riêng của từng user).
    */
-  private async emitToParticipants(
-    conversationId: string,
+  private emitToParticipants(
+    conversation: ConversationDocument,
     event: string,
     payload: unknown,
   ) {
-    const conversation =
-      await this.conversationsService.findById(conversationId);
+    const rooms = conversation.participants.map((participant) =>
+      this.getUserRoom(this.getParticipantId(participant)),
+    );
 
-    const rooms =
-      conversation?.participants.map((participant) =>
-        this.getUserRoom(this.getParticipantId(participant)),
-      ) ?? [];
-
-    // Không tìm thấy cuộc trò chuyện thì gửi tạm vào room của cuộc trò chuyện.
     // Không được truyền mảng rỗng cho .to(), vì khi đó Socket.IO gửi cho TẤT CẢ.
-    const target = rooms.length > 0 ? rooms : conversationId;
-    this.server.to(target).emit(event, payload);
+    if (rooms.length === 0) {
+      return;
+    }
+
+    this.server.to(rooms).emit(event, payload);
   }
 
   /**
